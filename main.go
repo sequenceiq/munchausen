@@ -53,16 +53,32 @@ func main() {
 
 	firstNode := startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-0"), First, consulServerCount, "")
 	swarmNodes = append(swarmNodes, firstNode)
+	sem := make(chan empty, len(nodes)-1)
 	for i := 1; i < len(nodes); i++ {
-		if i < consulServerCount {
-			swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Server, consulServerCount, firstNode.IP))
-		} else {
-			swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Agent, consulServerCount, firstNode.IP))
-		}
+		go func(i int) {
+			if i < consulServerCount {
+				swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Server, consulServerCount, firstNode.IP))
+			} else {
+				swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Agent, consulServerCount, firstNode.IP))
+			}
+			sem <- empty{}
+		}(i)
 	}
 
+	for i := 1; i < len(nodes); i++ {
+		<-sem
+	}
+
+	sem = make(chan empty, len(nodes)-1)
 	for i, node := range swarmNodes {
-		startSwarmAgentContainer(tmpSwarmClient, fmt.Sprintf("swarm-%v", i), node, firstNode.IP)
+		go func(i int, node *docker.SwarmNode) {
+			startSwarmAgentContainer(tmpSwarmClient, fmt.Sprintf("swarm-%v", i), node, firstNode.IP)
+			sem <- empty{}
+		}(i, node)
+	}
+
+	for i := 0; i < len(nodes); i++ {
+		<-sem
 	}
 
 	time.Sleep(3000 * time.Millisecond)

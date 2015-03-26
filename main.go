@@ -68,15 +68,10 @@ func main() {
 	time.Sleep(3000 * time.Millisecond)
 	startSwarmManagerContainer(tmpSwarmClient, SwarmContainerName, "consul://"+firstNode.IP+":8500/swarm", true)
 
-	log.Println("Wait for new swarm manager.")
-	time.Sleep(3000 * time.Millisecond)
-
 	log.Println("Removing temporary Swarm manager.")
-	swarmClient, _ := docker.NewClient("http://127.0.0.1:3376")
-	swarmClient.RemoveContainer(docker.RemoveContainerOptions{ID: tmpSwarmManagerContainer.ID})
+	client.RemoveContainer(docker.RemoveContainerOptions{ID: tmpSwarmManagerContainer.ID, Force: true})
 
 	log.Println("Finished Swarm bootstrapping")
-
 }
 
 func startConsulContainer(client *docker.Client, name string, nodeType ConsulNode, serverCount int, joinIp string) *docker.SwarmNode {

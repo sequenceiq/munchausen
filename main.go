@@ -14,6 +14,7 @@ type empty struct{}
 type ConsulNode int
 
 const ConsulImage = "sequenceiq/consul:v0.4.1.ptr"
+const SwarmImage = "swarm"
 
 const (
 	First ConsulNode = iota
@@ -39,7 +40,7 @@ func main() {
 	client, _ := docker.NewClient(endpoint)
 
 	config := docker.Config{
-		Image: "swarm",
+		Image: SwarmImage,
 		Cmd:   []string{"manage", "-H", "tcp://0.0.0.0:3376", nodesAsString},
 	}
 	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: "tmp-swarm-mgr", Config: &config})
@@ -58,24 +59,23 @@ func main() {
 
 	firstNode := startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-0"), First, consulServerCount, "")
 	swarmNodes = append(swarmNodes, firstNode)
-	log.Println(swarmNodes)
 	for i := 1; i < len(nodes); i++ {
 		if i < consulServerCount {
 			swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Server, consulServerCount, firstNode.IP))
-			log.Println(swarmNodes)
 		} else {
 			swarmNodes = append(swarmNodes, startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i), Agent, consulServerCount, firstNode.IP))
-			log.Println(swarmNodes)
 		}
 	}
 
-	log.Println(swarmNodes)
+	for i, node := range swarmNodes {
+		startSwarmAgentContainer(tmpSwarmClient, fmt.Sprintf("swarm-%v", i), node, firstNode.IP)
+	}
 
 	log.Println("Finished Swarm bootstrapping")
 
 }
 
-func startConsulContainer(client *docker.Client, containerName string, nodeType ConsulNode, serverCount int, joinIp string) *docker.SwarmNode {
+func startConsulContainer(client *docker.Client, name string, nodeType ConsulNode, serverCount int, joinIp string) *docker.SwarmNode {
 	var createCmd []string
 	switch nodeType {
 	case First:
@@ -98,9 +98,20 @@ func startConsulContainer(client *docker.Client, containerName string, nodeType 
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 		PortBindings:  portBindings,
 	}
-	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: containerName, Config: &consulConfig, HostConfig: &consulHostConfig})
+	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: name, Config: &consulConfig, HostConfig: &consulHostConfig})
 	client.StartContainer(container.ID, &consulHostConfig)
 	container, _ = client.InspectContainer(container.ID)
 	log.Println("Started consul container", container.Name, container.ID)
 	return container.Node
+}
+
+func startSwarmAgentContainer(client *docker.Client, name string, node *docker.SwarmNode, consulIP string) {
+	config := docker.Config{
+		Image: SwarmImage,
+		Cmd:   []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
+		Env:   []string{"constraint:node==" + node.Name},
+	}
+	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: name, Config: &config})
+	client.StartContainer(container.ID, &docker.HostConfig{})
+	log.Println("Started swarm agent container", container.Name, container.ID)
 }

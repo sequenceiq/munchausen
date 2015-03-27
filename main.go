@@ -15,7 +15,7 @@ var (
 	flConsulServers = cli.IntFlag{
 		Name:  "consulServers",
 		Value: 3,
-		Usage: "",
+		Usage: "number of consul servers",
 	}
 )
 
@@ -42,7 +42,7 @@ func main() {
 		{
 			Name:      "bootstrap",
 			ShortName: "b",
-			Usage:     "Bootstraps the cluster. A static list of IPs or a static file must be passed as the first argument.",
+			Usage:     "Bootstraps the cluster. A comma separated list of IPs must be passed as the first argument.",
 			Flags:     []cli.Flag{flConsulServers},
 			Action:    bootstrap,
 		},

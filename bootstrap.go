@@ -4,7 +4,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/martonsereg/dockerclient"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +37,7 @@ func bootstrap(c *cli.Context) {
 
 	log.Infof("[bootstrap] Started Swarm bootstrapping with parameters. Consul servers: %v, Nodes: %s", c.Int(flConsulServers.Name), nodesAsString)
 	log.Debug("[bootstrap] Creating docker client with docker.sock.")
-	client, _ := docker.NewClient("unix:///var/run/docker.sock")
+	client, _ := docker.NewDockerClient("unix:///var/run/docker.sock", nil)
 
 	tmpSwarmManagerID := startSwarmManagerContainer(client, TmpSwarmContainerName, nodesAsString, false)
 
@@ -46,7 +46,7 @@ func bootstrap(c *cli.Context) {
 	time.Sleep(3000 * time.Millisecond)
 
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
-	tmpSwarmClient, _ := docker.NewClient("http://" + tmpSwarmManagerContainer.NetworkSettings.IPAddress + ":3376")
+	tmpSwarmClient, _ := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IpAddress+":3376", nil)
 
 	var swarmNodes []*docker.SwarmNode
 
@@ -86,13 +86,13 @@ func bootstrap(c *cli.Context) {
 	startSwarmManagerContainer(tmpSwarmClient, SwarmContainerName, "consul://"+firstNode.IP+":8500/swarm", true)
 
 	log.Debug("[bootstrap] Removing temporary Swarm manager.")
-	client.RemoveContainer(docker.RemoveContainerOptions{ID: tmpSwarmManagerContainer.ID, Force: true})
+	client.RemoveContainer(tmpSwarmManagerContainer.Id, true, true)
 	log.Info("[bootstrap] Removed temporary Swarm manager.")
 
 	log.Info("[bootstrap] Finished Swarm bootstrapping.")
 }
 
-func startConsulContainer(client *docker.Client, name string, nodeType ConsulNode, serverCount int, joinIp string) *docker.SwarmNode {
+func startConsulContainer(client *docker.DockerClient, name string, nodeType ConsulNode, serverCount int, joinIp string) *docker.SwarmNode {
 	var createCmd []string
 	switch nodeType {
 	case First:
@@ -105,71 +105,75 @@ func startConsulContainer(client *docker.Client, name string, nodeType ConsulNod
 
 	log.Debugf("[bootstrap] Creating consul container with cmd: %s  [Name: %s]", createCmd, name)
 
-	exposedPorts := make(map[docker.Port]struct{})
-	var empty struct{}
-	exposedPorts["8500/tcp"] = empty
-	exposedPorts["8400/tcp"] = empty
-
-	config := docker.Config{
-		Image:        ConsulImage,
-		Cmd:          createCmd,
-		ExposedPorts: exposedPorts,
-	}
-	portBindings := make(map[docker.Port][]docker.PortBinding)
-	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: "8500"}}
-	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: "8400"}}
+	portBindings := make(map[string][]docker.PortBinding)
+	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
+	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
 
 	hostConfig := docker.HostConfig{
 		NetworkMode:   "host",
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 		PortBindings:  portBindings,
 	}
-	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: name, Config: &config, HostConfig: &hostConfig})
-	log.Debugf("[bootstrap] Created consul container successfully, trying to start it. [Name: %s]", container.Name)
-	client.StartContainer(container.ID, &hostConfig)
-	container, _ = client.InspectContainer(container.ID)
-	log.Infof("[bootstrap] Started consul container on node: %s [Name: %s, ID: %s]", container.Node.IP, container.Name, container.ID)
+
+	exposedPorts := make(map[string]struct{})
+	var empty struct{}
+	exposedPorts["8500/tcp"] = empty
+	exposedPorts["8400/tcp"] = empty
+
+	config := &docker.ContainerConfig{
+		Image:        ConsulImage,
+		Cmd:          createCmd,
+		ExposedPorts: exposedPorts,
+		HostConfig:   hostConfig,
+	}
+
+	containerID, _ := client.CreateContainer(config, name)
+	log.Debugf("[bootstrap] Created consul container successfully, trying to start it. [Name: %s]", name)
+	client.StartContainer(containerID, &hostConfig)
+	container, _ := client.InspectContainer(containerID)
+	log.Infof("[bootstrap] Started consul container on node: %s [Name: %s, ID: %s]", container.Node.IP, container.Name, container.Id)
 	return container.Node
 }
 
-func startSwarmAgentContainer(client *docker.Client, name string, node *docker.SwarmNode, consulIP string) {
+func startSwarmAgentContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulIP string) {
 	log.Debugf("[bootstrap] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.IP, "consul://"+consulIP+":8500/swarm", name)
-	config := docker.Config{
+	config := &docker.ContainerConfig{
 		Image: SwarmImage,
 		Cmd:   []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
 		Env:   []string{"constraint:node==" + node.Name},
 	}
-	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: name, Config: &config})
-	log.Debugf("[bootstrap] Created swarm agent container successfully, trying to start it. [Name: %s]", container.Name)
-	client.StartContainer(container.ID, &docker.HostConfig{})
-	log.Infof("[bootstrap] Started swarm agent container on node: %s [Name: %s, ID: %s]", node.IP, container.Name, container.ID)
+	containerID, _ := client.CreateContainer(config, name)
+	log.Debugf("[bootstrap] Created swarm agent container successfully, trying to start it. [Name: %s]", name)
+	client.StartContainer(containerID, &docker.HostConfig{})
+	log.Infof("[bootstrap] Started swarm agent container on node: %s [Name: %s, ID: %s]", node.IP, name, containerID)
 }
 
-func startSwarmManagerContainer(client *docker.Client, name string, discoveryParam string, bindPort bool) string {
+func startSwarmManagerContainer(client *docker.DockerClient, name string, discoveryParam string, bindPort bool) string {
 	log.Debugf("[bootstrap] Creating swarm manager container with discovery parameter: %s", discoveryParam)
 	hostConfig := docker.HostConfig{}
 	if bindPort {
-		portBindings := make(map[docker.Port][]docker.PortBinding)
-		portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: "3376"}}
+		portBindings := make(map[string][]docker.PortBinding)
+		portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "3376"}}
 		hostConfig = docker.HostConfig{
 			PortBindings: portBindings,
 		}
 	}
 
-	exposedPorts := make(map[docker.Port]struct{})
+	exposedPorts := make(map[string]struct{})
 	var empty struct{}
 	exposedPorts["3376/tcp"] = empty
 
-	config := docker.Config{
+	config := &docker.ContainerConfig{
 		Image:        SwarmImage,
 		Cmd:          []string{"--debug", "manage", "-H", "tcp://0.0.0.0:3376", discoveryParam},
 		Env:          []string{"affinity:container==" + TmpSwarmContainerName},
 		ExposedPorts: exposedPorts,
+		HostConfig:   hostConfig,
 	}
 
-	container, _ := client.CreateContainer(docker.CreateContainerOptions{Name: name, Config: &config, HostConfig: &hostConfig})
-	log.Debugf("[bootstrap] Created swarm manager container successfully, trying to start it.  [Name: %s]", container.Name)
-	client.StartContainer(container.ID, &hostConfig)
-	log.Infof("[bootstrap] Started swarm manager container [Name: %s, ID: %s]", container.Name, container.ID)
-	return container.ID
+	containerID, _ := client.CreateContainer(config, name)
+	log.Debugf("[bootstrap] Created swarm manager container successfully, trying to start it.  [Name: %s]", name)
+	client.StartContainer(containerID, &hostConfig)
+	log.Infof("[bootstrap] Started swarm manager container [Name: %s, ID: %s]", name, containerID)
+	return containerID
 }

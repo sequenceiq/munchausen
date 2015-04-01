@@ -12,10 +12,10 @@ var (
 		Usage:  "debug mode",
 		EnvVar: "DEBUG",
 	}
-	flConsulServers = cli.IntFlag{
+	flConsulServers = cli.StringFlag{
 		Name:  "consulServers",
-		Value: 3,
-		Usage: "number of consul servers",
+		Value: "",
+		Usage: "IP addresses of consul servers as a comma separated list",
 	}
 )
 

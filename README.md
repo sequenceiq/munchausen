@@ -28,7 +28,7 @@ The easiest way to get started is to run the docker container on one of the node
 
  ```
  docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
- sequenceiq/munchausen bootstrap --consulServers=3 <node_ip1:2375>,<node_ip2:2375>... 
+ sequenceiq/munchausen bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
  ```
 
  *If the Docker HTTP/HTTPS API on the machine is exposed, it can be used to bootstrap the cluster from a remote location, the only requirement is a running docker daemon on each machine.*
@@ -37,12 +37,12 @@ The easiest way to get started is to run the docker container on one of the node
 
 Use the `--debug` switch
 ```
-munchausen --debug bootstrap --consulServers=3 <node_ip1:2375>,<node_ip2:2375>... 
+munchausen --debug bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
 ```
 
 or provide an environment variable:
 ```
-DEBUG=1 munchausen bootstrap --consulServers=3 <node_ip1:2375>,<node_ip2:2375>... 
+DEBUG=1 munchausen bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
 ```
 
 ## Notes

@@ -109,14 +109,18 @@ func startConsulContainer(client *docker.DockerClient, name string) *docker.Swar
 
 func startSwarmAgentContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulIP string) {
 	log.Debugf("[bootstrap] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://"+consulIP+":8500/swarm", name)
+	hostConfig := docker.HostConfig{
+		RestartPolicy: docker.RestartPolicy{Name: "always"},
+	}
 	config := &docker.ContainerConfig{
-		Image: SwarmImage,
-		Cmd:   []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
-		Env:   []string{"constraint:node==" + node.Name},
+		Image:      SwarmImage,
+		Cmd:        []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
+		Env:        []string{"constraint:node==" + node.Name},
+		HostConfig: hostConfig,
 	}
 	containerID, _ := client.CreateContainer(config, name)
 	log.Debugf("[bootstrap] Created swarm agent container successfully, trying to start it. [Name: %s]", name)
-	client.StartContainer(containerID, &docker.HostConfig{})
+	client.StartContainer(containerID, &hostConfig)
 	log.Infof("[bootstrap] Started swarm agent container on node: %s [Name: %s, ID: %s]", node.Name, name, containerID)
 }
 

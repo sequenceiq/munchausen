@@ -6,6 +6,7 @@ import (
 	"github.com/codegangsta/cli"
 	docker "github.com/martonsereg/dockerclient"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -71,46 +72,41 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, startSwarmM
 
 	swarmNodes := getSwarmNodes(tmpSwarmClient)
 
-	sem := make(chan empty, len(swarmNodes))
+	var wg sync.WaitGroup
 	for _, node := range swarmNodes {
+		wg.Add(1)
 		go func(node *docker.SwarmNode) {
+			defer wg.Done()
 			copyConsulConfigs(tmpSwarmClient, node, consulServers)
-			sem <- empty{}
 		}(node)
 	}
 
 	log.Debug("[bootstrap] Wait for consul configurations to be ready on all nodes.")
-	for i := 0; i < len(swarmNodes); i++ {
-		<-sem
-	}
+	wg.Wait()
 
-	sem = make(chan empty, len(swarmNodes))
 	for i, _ := range swarmNodes {
+		wg.Add(1)
 		go func(i int) {
+			defer wg.Done()
 			startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i))
-			sem <- empty{}
 		}(i)
 	}
 
 	log.Debug("[bootstrap] Wait for Consul containers to create on all nodes.")
-	for i := 0; i < len(swarmNodes); i++ {
-		<-sem
-	}
+	wg.Wait()
 
 	//TODO: wait until a leader is elected, or start swarm agents with restart policy=always
 
-	sem = make(chan empty, len(swarmNodes))
 	for i, node := range swarmNodes {
+		wg.Add(1)
 		go func(i int, node *docker.SwarmNode) {
+			defer wg.Done()
 			startSwarmAgentContainer(tmpSwarmClient, fmt.Sprintf("swarm-%v", i), node, consulServers[0])
-			sem <- empty{}
 		}(i, node)
 	}
 
 	log.Debug("[bootstrap] Wait for Swarm Agent containers to create on all nodes.")
-	for i := 0; i < len(swarmNodes); i++ {
-		<-sem
-	}
+	wg.Wait()
 
 	if startSwarmManager {
 		time.Sleep(3000 * time.Millisecond)

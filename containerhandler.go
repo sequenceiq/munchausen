@@ -143,9 +143,14 @@ func startSwarmManagerContainer(client *docker.DockerClient, name string, discov
 		HostConfig:   hostConfig,
 	}
 
-	containerID, _ := client.CreateContainer(config, name)
+	containerID, createErr := client.CreateContainer(config, name)
+	if createErr != nil {
+		log.Fatalf("[bootstrap] Failed to create Swarm manager container: %s", createErr)
+	}
 	log.Debugf("[bootstrap] Created swarm manager container successfully, trying to start it.  [Name: %s]", name)
-	client.StartContainer(containerID, &hostConfig)
+	if startErr := client.StartContainer(containerID, &hostConfig); startErr != nil {
+		log.Fatal("[bootstrap] Failed to start Swarm manager container: %s", startErr)
+	}
 	log.Infof("[bootstrap] Started swarm manager container [Name: %s, ID: %s]", name, containerID)
 	return containerID
 }

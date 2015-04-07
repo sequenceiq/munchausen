@@ -1,13 +1,19 @@
 package main
 
 import (
-	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	consul "github.com/hashicorp/consul/api"
 	docker "github.com/martonsereg/dockerclient"
+	"os"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	MaxGetLeaderAttempts            = 12
+	SecondsBetweenGetLeaderAttempts = 5
 )
 
 func bootstrap(c *cli.Context) {
@@ -60,49 +66,61 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, startSwarmM
 	log.Debug("[bootstrap] Creating docker client with docker.sock.")
 	client, err := docker.NewDockerClient("unix:///var/run/docker.sock", nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("[bootstrap] Failed to create Docker client with docker.sock: %s", err)
 	}
 
-	tmpSwarmManagerID := startSwarmManagerContainer(client, TmpSwarmContainerName, nodesAsString, false)
-	tmpSwarmManagerContainer, _ := client.InspectContainer(tmpSwarmManagerID)
+	tmpSwarmManagerID, swarmManagerErr := runSwarmManagerContainer(client, TmpSwarmContainerName, nodesAsString, false)
+	if swarmManagerErr != nil {
+		os.Exit(1)
+	}
+
+	tmpSwarmManagerContainer, inspectErr := client.InspectContainer(tmpSwarmManagerID)
+	if inspectErr != nil {
+		log.Fatalf("[bootstrap] Failed to inspect temporary Swarm manager container: %s", err)
+	}
 	log.Debug("[bootstrap] Wait 3 seconds for swarm manager.")
 	time.Sleep(3000 * time.Millisecond)
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
-	tmpSwarmClient, _ := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IpAddress+":3376", nil)
+	tmpSwarmClient, err := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IpAddress+":3376", nil)
+	if err != nil {
+		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
+	}
 
 	swarmNodes := getSwarmNodes(tmpSwarmClient)
+	// TODO: check if len(swarmNodes) equals nodes in args[0]
+	log.Infof("[bootstrap] Temporary Swarm manager found %v nodes", len(swarmNodes))
 
 	var wg sync.WaitGroup
 	for _, node := range swarmNodes {
 		wg.Add(1)
 		go func(node *docker.SwarmNode) {
 			defer wg.Done()
-			copyConsulConfigs(tmpSwarmClient, node, consulServers)
+			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers)
 		}(node)
 	}
 
 	log.Debug("[bootstrap] Wait for consul configurations to be ready on all nodes.")
 	wg.Wait()
 
-	for i, _ := range swarmNodes {
+	for i := 0; i < len(swarmNodes); i++ {
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			startConsulContainer(tmpSwarmClient, fmt.Sprintf("consul-%v", i))
-		}(i)
+			runConsulContainer(tmpSwarmClient, "consul")
+		}()
 	}
 
 	log.Debug("[bootstrap] Wait for Consul containers to create on all nodes.")
 	wg.Wait()
 
-	//TODO: wait until a leader is elected, or start swarm agents with restart policy=always
+	checkConsulCluster(consulServers)
 
-	for i, node := range swarmNodes {
+	for _, node := range swarmNodes {
 		wg.Add(1)
-		go func(i int, node *docker.SwarmNode) {
+		go func(node *docker.SwarmNode) {
 			defer wg.Done()
-			startSwarmAgentContainer(tmpSwarmClient, fmt.Sprintf("swarm-%v", i), node, consulServers[0])
-		}(i, node)
+			runSwarmAgentContainer(tmpSwarmClient, "swarm-agent", node, consulServers[0])
+		}(node)
 	}
 
 	log.Debug("[bootstrap] Wait for Swarm Agent containers to create on all nodes.")
@@ -110,10 +128,40 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, startSwarmM
 
 	if startSwarmManager {
 		time.Sleep(3000 * time.Millisecond)
-		startSwarmManagerContainer(tmpSwarmClient, SwarmContainerName, "consul://"+consulServers[0]+":8500/swarm", true)
+		if _, err := runSwarmManagerContainer(client, SwarmContainerName, "consul://"+consulServers[0]+":8500/swarm", true); err != nil {
+			os.Exit(1)
+		}
 	}
 
 	log.Debug("[bootstrap] Removing temporary Swarm manager.")
 	client.RemoveContainer(tmpSwarmManagerContainer.Id, true, true)
 	log.Info("[bootstrap] Removed temporary Swarm manager.")
+}
+
+func checkConsulCluster(consulServers []string) {
+	log.Debug("[bootstrap] Checking if Consul servers are available, and a leader is present.")
+	consulConfig := consul.DefaultConfig()
+	consulConfig.Address = consulServers[0] + ":8500"
+	consulClient, _ := consul.NewClient(consulConfig)
+	for i := 0; ; i++ {
+		if i >= MaxGetLeaderAttempts {
+			log.Fatalf("Failed to get Consul leader in %v attempts, exiting.", MaxGetLeaderAttempts)
+		}
+		log.Debugf("Getting consul leader, attempt %v", i)
+		if leader, err := consulClient.Status().Leader(); err != nil || len(leader) == 0 {
+			log.Debugf("Failed to get Consul leader: %s", err)
+		} else {
+			log.Infof("Consul leader found: %s", leader)
+			break
+		}
+		time.Sleep(SecondsBetweenGetLeaderAttempts * time.Second)
+	}
+
+	if peers, err := consulClient.Status().Peers(); err != nil {
+		log.Fatalf("Failed to get Consul peers, exiting: %s", err)
+	} else if len(peers) != len(consulServers) {
+		log.Fatalf("Found %v Consul peers (%s), expected %v", len(peers), peers, len(consulServers))
+	} else {
+		log.Infof("Consul peers found: %s", peers)
+	}
 }

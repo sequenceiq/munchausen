@@ -2,11 +2,12 @@ package main
 
 import ()
 
-const ConsulImage = "sequenceiq/consul:v0.4.1.ptr"
-const SwarmImage = "swarm"
-
-const TmpSwarmContainerName = "tmp-swarm-manager"
-const SwarmContainerName = "swarm-manager"
+const (
+	ConsulImage           = "sequenceiq/consul:v0.4.1.ptr"
+	SwarmImage            = "swarm"
+	TmpSwarmContainerName = "tmp-swarm-manager"
+	SwarmContainerName    = "swarm-manager"
+)
 
 const (
 	Server = iota

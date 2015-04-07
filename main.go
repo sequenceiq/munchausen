@@ -42,9 +42,16 @@ func main() {
 		{
 			Name:      "bootstrap",
 			ShortName: "b",
-			Usage:     "Bootstraps the cluster. A comma separated list of IPs must be passed as the first argument.",
+			Usage:     "Bootstraps the cluster. A comma separated list of Docker daemon addresses must be passed as the first argument.",
 			Flags:     []cli.Flag{flConsulServers},
 			Action:    bootstrap,
+		},
+		{
+			Name:      "add",
+			ShortName: "c",
+			Usage:     "Adds new nodes to a Consul based Swarm cluster. A comma separated list of the new Docker daemons must be passed as the first argument.",
+			Flags:     []cli.Flag{flConsulServers},
+			Action:    add,
 		},
 	}
 

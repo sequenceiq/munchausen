@@ -138,12 +138,12 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	log.Debug("[bootstrap] Wait for consul configurations to be ready on all nodes.")
 	wg.Wait()
 
-	for i := 0; i < len(swarmNodes); i++ {
+	for _, node := range swarmNodes {
 		wg.Add(1)
-		go func() {
+		go func(node *docker.SwarmNode) {
 			defer wg.Done()
-			runConsulContainer(tmpSwarmClient, "consul")
-		}()
+			runConsulContainer(tmpSwarmClient, "consul", node)
+		}(node)
 	}
 
 	log.Debug("[bootstrap] Wait for Consul containers to create on all nodes.")

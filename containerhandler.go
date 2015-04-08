@@ -10,23 +10,26 @@ import (
 	"time"
 )
 
-func getSwarmNodes(client *docker.DockerClient) []*docker.SwarmNode {
-	info, _ := client.Info()
-	var swarmNodes []*docker.SwarmNode
-	// Swarm returns nodes and their info in a 2 dimensional json array basically unstructured
-	// The first array contains the text "Nodes" and the number of the nodes, then comes the nodes in the following 4 element blocks:
-	// [name, addr],[" └ Containers", containers],[" └ Reserved CPUs", cpu],[" └ Reserved Memory", memory],[name, addr],[" └ Containers"],...
-	if info.DriverStatus[0][0] == "\bNodes" {
-		nodeCount, _ := strconv.Atoi(info.DriverStatus[0][1])
-		for i := 0; i < nodeCount; i++ {
-			swarmNodes = append(swarmNodes, &docker.SwarmNode{
-				Addr: info.DriverStatus[i*4+1][1],
-				Name: info.DriverStatus[i*4+1][0],
-			})
+func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
+	if info, err := client.Info(); err != nil {
+		return nil, fmt.Errorf("Failed to retrieve info from tmp swarm manager: %s", err)
+	} else {
+		var swarmNodes []*docker.SwarmNode
+		// Swarm returns nodes and their info in a 2 dimensional json array basically unstructured
+		// The first array contains the text "Nodes" and the number of the nodes, then comes the nodes in the following 4 element blocks:
+		// [name, addr],[" └ Containers", containers],[" └ Reserved CPUs", cpu],[" └ Reserved Memory", memory],[name, addr],[" └ Containers"],...
+		if info.DriverStatus[0][0] == "\bNodes" {
+			nodeCount, _ := strconv.Atoi(info.DriverStatus[0][1])
+			for i := 0; i < nodeCount; i++ {
+				swarmNodes = append(swarmNodes, &docker.SwarmNode{
+					Addr: info.DriverStatus[i*4+1][1],
+					Name: info.DriverStatus[i*4+1][0],
+				})
+			}
 		}
+		log.Infof("[bootstrap] Temporary Swarm manager found %v nodes", len(swarmNodes))
+		return swarmNodes, nil
 	}
-	log.Infof("[bootstrap] Temporary Swarm manager found %v nodes", len(swarmNodes))
-	return swarmNodes
 }
 
 func copyConsulConfigsDummy(i int) error {

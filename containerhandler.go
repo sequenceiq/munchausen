@@ -7,7 +7,6 @@ import (
 	docker "github.com/martonsereg/dockerclient"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
@@ -30,14 +29,6 @@ func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
 		log.Infof("[bootstrap] Temporary Swarm manager found %v nodes", len(swarmNodes))
 		return swarmNodes, nil
 	}
-}
-
-func copyConsulConfigsDummy(i int) error {
-	time.Sleep(1800 * time.Millisecond)
-	if i == 1 || i == 2 {
-		return fmt.Errorf("Error, error, error!!")
-	}
-	return nil
 }
 
 func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulServers []string) (string, error) {
@@ -82,6 +73,11 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		Env:        []string{"constraint:node==" + node.Name},
 		HostConfig: hostConfig,
 	}
+	if err := client.RemoveContainer(fmt.Sprintf("%s/%s", node.Name, name), true, true); err != nil {
+		log.Debugf("Couldn't remove container: %s/%s: %s", node.Name, name, err)
+	} else {
+		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
+	}
 	id, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
 		log.Errorf("[bootstrap] Failed to create copy container: %s", createErr)
@@ -96,7 +92,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *docker.SwarmNode) (string, error) {
 	log.Debugf("[bootstrap] Creating consul container [Name: %s]", name)
 
 	portBindings := make(map[string][]docker.PortBinding)
@@ -118,9 +114,14 @@ func runConsulContainer(client *docker.DockerClient, name string) (string, error
 	config := &docker.ContainerConfig{
 		Image:        ConsulImage,
 		ExposedPorts: exposedPorts,
+		Env:          []string{"constraint:node==" + node.Name},
 		HostConfig:   hostConfig,
 	}
-
+	if err := client.RemoveContainer(fmt.Sprintf("%s/%s", node.Name, name), true, true); err != nil {
+		log.Debugf("Couldn't remove container: %s/%s: %s", node.Name, name, err)
+	} else {
+		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
+	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
 		log.Errorf("[bootstrap] Failed to create consul container: %s", createErr)
@@ -145,6 +146,11 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *dock
 		Cmd:        []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
 		Env:        []string{"constraint:node==" + node.Name},
 		HostConfig: hostConfig,
+	}
+	if err := client.RemoveContainer(fmt.Sprintf("%s/%s", node.Name, name), true, true); err != nil {
+		log.Debugf("Couldn't remove container: %s/%s: %s", node.Name, name, err)
+	} else {
+		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
 	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
@@ -181,7 +187,11 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		ExposedPorts: exposedPorts,
 		HostConfig:   hostConfig,
 	}
-
+	if err := client.RemoveContainer(name, true, true); err != nil {
+		log.Debugf("Couldn't remove container: %s: %s", name, err)
+	} else {
+		log.Debugf("Force removed container with name %s.", name)
+	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
 		log.Errorf("[bootstrap] Failed to create Swarm manager container: %s", createErr)

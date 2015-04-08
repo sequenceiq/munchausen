@@ -32,6 +32,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
 }
 
 func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulServers []string) (string, error) {
+	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[bootstrap] Creating consul configuration file for node %s.", node.Name)
 	server := false
 	var joinIPs []string
@@ -93,6 +94,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 }
 
 func runConsulContainer(client *docker.DockerClient, name string, node *docker.SwarmNode) (string, error) {
+	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[bootstrap] Creating consul container [Name: %s]", name)
 
 	portBindings := make(map[string][]docker.PortBinding)
@@ -137,6 +139,7 @@ func runConsulContainer(client *docker.DockerClient, name string, node *docker.S
 }
 
 func runSwarmAgentContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulIP string) (string, error) {
+	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[bootstrap] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://"+consulIP+":8500/swarm", name)
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},

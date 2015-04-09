@@ -18,7 +18,7 @@ var (
 		Usage: "IP addresses of consul servers as a comma separated list",
 	}
 	flConsulJoin = cli.StringFlag{
-		Name:  "consul",
+		Name:  "join",
 		Value: "",
 		Usage: "The consul cluster to join (consul://<consul_addr>:<port>)",
 	}

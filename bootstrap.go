@@ -53,7 +53,7 @@ func bootstrap(c *cli.Context) {
 	}
 
 	if len(consulServers) != 3 && len(consulServers) != 5 && len(consulServers) != 7 {
-		log.Warnf("%v consul servers configured. Recommended is 3 or 5.", len(consulServers))
+		log.Warnf("[bootstrap] %v consul servers configured. Recommended is 3 or 5.", len(consulServers))
 	}
 
 	log.Infof("[bootstrap] Started Swarm bootstrapping with parameters. Consul servers: %v, Nodes: %s", len(consulServers), nodesAsString)
@@ -68,6 +68,10 @@ func add(c *cli.Context) {
 
 	if len(c.Args()) != 1 {
 		log.Fatalf("[bootstrap] Nodes must be provided as a comma separated list. See '%s add --help'.", c.App.Name)
+	}
+
+	if len(c.String(flConsulJoin.Name)) == 0 {
+		log.Fatalf("[bootstrap] --join is required. See '%s bootstrap --help'.", c.App.Name)
 	}
 
 	nodesAsString := c.Args()[0]
@@ -127,7 +131,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		log.Fatal(err)
 	}
 	if len(swarmNodes) != len(nodes) {
-		log.Warnf("Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(nodes), len(swarmNodes))
+		log.Warnf("[bootstrap] Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(nodes), len(swarmNodes))
 	}
 
 	var wg sync.WaitGroup
@@ -200,13 +204,13 @@ func getConsulPeers(consulAddress string) ([]string, error) {
 	consulClient, _ := consul.NewClient(consulConfig)
 	for i := 0; ; i++ {
 		if i >= MaxGetLeaderAttempts {
-			return nil, fmt.Errorf("Failed to get Consul leader in %v attempts, exiting.", MaxGetLeaderAttempts)
+			return nil, fmt.Errorf("[bootstrap] Failed to get Consul leader in %v attempts, exiting.", MaxGetLeaderAttempts)
 		}
-		log.Debugf("Getting consul leader, attempt %v", i)
+		log.Debugf("[bootstrap] Getting consul leader, attempt %v", i)
 		if leader, err := consulClient.Status().Leader(); err != nil || len(leader) == 0 {
-			log.Debugf("Failed to get Consul leader: %s", err)
+			log.Debugf("[bootstrap] Failed to get Consul leader: %s", err)
 		} else {
-			log.Infof("Consul leader found: %s", leader)
+			log.Infof("[bootstrap] Consul leader found: %s", leader)
 			break
 		}
 		time.Sleep(SecondsBetweenGetLeaderAttempts * time.Second)
@@ -214,11 +218,12 @@ func getConsulPeers(consulAddress string) ([]string, error) {
 
 	log.Debug("[bootstrap] Getting Consul peers.")
 	if peers, err := consulClient.Status().Peers(); err != nil {
-		return nil, fmt.Errorf("Failed to get Consul peers, exiting: %s", err)
+		return nil, fmt.Errorf("[bootstrap] Failed to get Consul peers, exiting: %s", err)
 	} else {
 		for i := 0; i < len(peers); i++ {
 			peers[i] = strings.Split(peers[i], ":")[0]
 		}
+		log.Infof("[bootstrap] Consul peers found: %s", peers)
 		return peers, nil
 	}
 }

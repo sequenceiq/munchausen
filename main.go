@@ -17,6 +17,11 @@ var (
 		Value: "",
 		Usage: "IP addresses of consul servers as a comma separated list",
 	}
+	flConsulJoin = cli.StringFlag{
+		Name:  "join",
+		Value: "",
+		Usage: "The consul cluster to join (consul://<consul_addr>:<port>)",
+	}
 )
 
 func main() {
@@ -48,9 +53,9 @@ func main() {
 		},
 		{
 			Name:      "add",
-			ShortName: "c",
+			ShortName: "a",
 			Usage:     "Adds new nodes to a Consul based Swarm cluster. A comma separated list of the new Docker daemons must be passed as the first argument.",
-			Flags:     []cli.Flag{flConsulServers},
+			Flags:     []cli.Flag{flConsulJoin},
 			Action:    add,
 		},
 	}

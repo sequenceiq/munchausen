@@ -53,7 +53,7 @@ func bootstrap(c *cli.Context) {
 	}
 
 	if len(consulServers) != 3 && len(consulServers) != 5 && len(consulServers) != 7 {
-		log.Warnf("%v consul servers configured. Recommended is 3 or 5.", len(consulServers))
+		log.Warnf("[bootstrap] %v consul servers configured. Recommended is 3 or 5.", len(consulServers))
 	}
 
 	log.Infof("[bootstrap] Started Swarm bootstrapping with parameters. Consul servers: %v, Nodes: %s", len(consulServers), nodesAsString)
@@ -70,26 +70,34 @@ func add(c *cli.Context) {
 		log.Fatalf("[bootstrap] Nodes must be provided as a comma separated list. See '%s add --help'.", c.App.Name)
 	}
 
+	if len(c.String(flConsulJoin.Name)) == 0 {
+		log.Fatalf("[bootstrap] --join is required. See '%s bootstrap --help'.", c.App.Name)
+	}
+
 	nodesAsString := c.Args()[0]
-	consulServers := strings.Split(c.String(flConsulServers.Name), ",")
+
+	consulJoin := c.String(flConsulJoin.Name)
+	if strings.HasPrefix(consulJoin, "consul://") {
+		consulJoin = consulJoin[9:]
+	}
+	if err := validateAddress(consulJoin); err != nil {
+		log.Fatal(err)
+	}
 
 	nodes, err := validateNodeUris(nodesAsString)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := validateConsulServerAddresses(consulServers); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := checkConsulCluster(consulServers); err != nil {
+	peers, err := getConsulPeers(consulJoin)
+	if err != nil {
 		log.Fatal(err)
 	}
 	// TODO: check if consul-servers are new nodes or not, check if other nodes are not in the cluster already
 
-	log.Infof("[bootstrap] Started Swarm add with parameters. Consul servers: %v, Nodes: %s", len(consulServers), nodesAsString)
+	log.Infof("[bootstrap] Started Swarm add with parameters. Consul servers: %v, Nodes: %s", len(peers), nodesAsString)
 
-	bootstrapNewNodes(nodesAsString, consulServers, nodes, false)
+	bootstrapNewNodes(nodesAsString, peers, nodes, false)
 
 	log.Info("[bootstrap] Finished adding new nodes to the Consul-Swarm cluster.")
 }
@@ -123,7 +131,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		log.Fatal(err)
 	}
 	if len(swarmNodes) != len(nodes) {
-		log.Warnf("Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(nodes), len(swarmNodes))
+		log.Warnf("[bootstrap] Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(nodes), len(swarmNodes))
 	}
 
 	var wg sync.WaitGroup
@@ -149,8 +157,21 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	log.Debug("[bootstrap] Wait for Consul containers to create on all nodes.")
 	wg.Wait()
 
-	if err := checkConsulCluster(consulServers); err != nil {
+	peers, err := getConsulPeers(consulServers[0] + ":8500")
+	if err != nil {
 		log.Fatal(err)
+	}
+	for _, server := range consulServers {
+		var found bool
+		for _, peer := range peers {
+			if server == peer {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Fatalf("[bootstrap] Provided consul server address %s is not among the consul peers: %s.", server, peers)
+		}
 	}
 
 	for _, node := range swarmNodes {
@@ -176,31 +197,33 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	log.Info("[bootstrap] Removed temporary Swarm manager.")
 }
 
-func checkConsulCluster(consulServers []string) error {
-	log.Debug("[bootstrap] Checking if Consul servers are available, and a leader is present.")
+func getConsulPeers(consulAddress string) ([]string, error) {
+	log.Debug("[bootstrap] Getting Consul leader.")
 	consulConfig := consul.DefaultConfig()
-	consulConfig.Address = consulServers[0] + ":8500"
+	consulConfig.Address = consulAddress
 	consulClient, _ := consul.NewClient(consulConfig)
 	for i := 0; ; i++ {
 		if i >= MaxGetLeaderAttempts {
-			return fmt.Errorf("Failed to get Consul leader in %v attempts, exiting.", MaxGetLeaderAttempts)
+			return nil, fmt.Errorf("[bootstrap] Failed to get Consul leader in %v attempts, exiting.", MaxGetLeaderAttempts)
 		}
-		log.Debugf("Getting consul leader, attempt %v", i)
+		log.Debugf("[bootstrap] Getting consul leader, attempt %v", i)
 		if leader, err := consulClient.Status().Leader(); err != nil || len(leader) == 0 {
-			log.Debugf("Failed to get Consul leader: %s", err)
+			log.Debugf("[bootstrap] Failed to get Consul leader: %s", err)
 		} else {
-			log.Infof("Consul leader found: %s", leader)
+			log.Infof("[bootstrap] Consul leader found: %s", leader)
 			break
 		}
 		time.Sleep(SecondsBetweenGetLeaderAttempts * time.Second)
 	}
 
+	log.Debug("[bootstrap] Getting Consul peers.")
 	if peers, err := consulClient.Status().Peers(); err != nil {
-		return fmt.Errorf("Failed to get Consul peers, exiting: %s", err)
-	} else if len(peers) != len(consulServers) {
-		return fmt.Errorf("Found %v Consul peers (%s), expected %v", len(peers), peers, len(consulServers))
+		return nil, fmt.Errorf("[bootstrap] Failed to get Consul peers, exiting: %s", err)
 	} else {
-		log.Infof("Consul peers found: %s", peers)
+		for i := 0; i < len(peers); i++ {
+			peers[i] = strings.Split(peers[i], ":")[0]
+		}
+		log.Infof("[bootstrap] Consul peers found: %s", peers)
+		return peers, nil
 	}
-	return nil
 }

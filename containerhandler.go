@@ -175,7 +175,9 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *dock
 
 func runSwarmManagerContainer(client *docker.DockerClient, name string, discoveryParam string, bindPort bool) (string, error) {
 	log.Debugf("[bootstrap] Creating swarm manager container with discovery parameter: %s", discoveryParam)
-	hostConfig := docker.HostConfig{}
+	hostConfig := docker.HostConfig{
+		RestartPolicy: docker.RestartPolicy{Name: "always"},
+	}
 	if bindPort {
 		portBindings := make(map[string][]docker.PortBinding)
 		portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "3376"}}

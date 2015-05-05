@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	MaxGetLeaderAttempts            = 12
-	SecondsBetweenGetLeaderAttempts = 5
-	SecondsBetweenDockerPings       = 5
+	MaxGetLeaderAttempts                 = 12
+	SecondsBetweenGetLeaderAttempts      = 5
+	SecondsBetweenDockerPings            = 5
+	MaxGetSwarmAgentsAttempts            = 12
+	SecondsBetweenGetSwarmAgentsAttempts = 5
 )
 
 func bootstrap(c *cli.Context) {
@@ -172,20 +174,36 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	if inspectErr != nil {
 		log.Fatalf("[bootstrap] Failed to inspect temporary Swarm manager container: %s", err)
 	}
-	log.Debug("[bootstrap] Wait 3 seconds for swarm manager.")
-	time.Sleep(3 * time.Second)
+
+	log.Debug("[bootstrap] Wait for temporary swarm manager to find the nodes.")
+	time.Sleep(SecondsBetweenGetSwarmAgentsAttempts * time.Second)
+
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
 	tmpSwarmClient, err := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IpAddress+":3376", nil)
 	if err != nil {
 		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
 	}
 
-	swarmNodes, err := getSwarmNodes(tmpSwarmClient)
-	if err != nil {
-		log.Fatal(err)
+	var swarmNodes []*docker.SwarmNode
+	for i := 0; ; i++ {
+		if i >= MaxGetSwarmAgentsAttempts {
+			log.Infof("[bootstrap] Failed to get all Swarm nodes in %v attempts.", MaxGetSwarmAgentsAttempts)
+			break
+		}
+		log.Debugf("[bootstrap] Retrieving nodes from temporary Swarm manager, attempt %v", i)
+		var swarmNodesErr error
+		swarmNodes, swarmNodesErr = getSwarmNodes(tmpSwarmClient)
+		if swarmNodesErr != nil {
+			log.Debugf("[bootstrap] Failed to get nodes from temporary Swarm manager: %s", err)
+		} else if len(swarmNodes) == len(nodes) {
+			log.Info("[bootstrap] Found all Swarm nodes.")
+			break
+		}
+		time.Sleep(SecondsBetweenGetSwarmAgentsAttempts * time.Second)
 	}
+
 	if len(swarmNodes) != len(nodes) {
-		log.Warnf("[bootstrap] Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(nodes), len(swarmNodes))
+		log.Warnf("[bootstrap] Swarm manager found %v nodes but expected %v. It is possible that some of the nodes won't be joined to the cluster.", len(swarmNodes), len(nodes))
 	}
 
 	var wg sync.WaitGroup

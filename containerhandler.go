@@ -182,7 +182,8 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		portBindings := make(map[string][]docker.PortBinding)
 		portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "3376"}}
 		hostConfig = docker.HostConfig{
-			PortBindings: portBindings,
+			PortBindings:  portBindings,
+			RestartPolicy: docker.RestartPolicy{Name: "always"},
 		}
 	}
 

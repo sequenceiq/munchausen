@@ -3,7 +3,7 @@ package main
 import ()
 
 const (
-	ConsulImage           = "sequenceiq/consul:v0.4.1.ptr"
+	ConsulImage           = "sequenceiq/consul:v0.5.0-v4"
 	SwarmImage            = "swarm:0.2.0"
 	TmpSwarmContainerName = "tmp-swarm-manager"
 	SwarmContainerName    = "swarm-manager"

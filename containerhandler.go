@@ -106,7 +106,7 @@ func runConsulContainer(client *docker.DockerClient, name string, node *docker.S
 	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
 
 	hostConfig := docker.HostConfig{
-		Binds:         []string{"/etc/consul/consul.json:/config/consul.json"},
+		Binds:         []string{"/etc/consul/consul.json:/config/consul.json", "/var/log/containers/consul:/var/log/consul"},
 		NetworkMode:   "host",
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 		PortBindings:  portBindings,

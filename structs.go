@@ -48,3 +48,13 @@ type ConsulConfig struct {
 	Ports              PortConfig `json:"ports"`
 	DNS                DNSConfig  `json:"dns_config"`
 }
+
+type SwarmNode struct {
+	ID     string
+	IP     string
+	Addr   string
+	Name   string
+	CPUs   int64
+	Memory int64
+	Labels map[string]string
+}

@@ -6,14 +6,14 @@ import (
 	"strconv"
 	"strings"
 	log "github.com/Sirupsen/logrus"
-	docker "github.com/akanto/dockerclient"
+	docker "github.com/samalba/dockerclient"
 )
 
-func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
+func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 	if info, err := client.Info(); err != nil {
 		return nil, fmt.Errorf("Failed to retrieve info from tmp swarm manager: %s", err)
 	} else {
-		var swarmNodes []*docker.SwarmNode
+		var swarmNodes []*SwarmNode
 		var nodeCount int
 		// Swarm returns nodes and their info in a 2 dimensional json array basically unstructured
 		// The first three arrays contain the Strategy ("\bStrategy"), Filters ("\bFilters") and Nodes ("\bNodes") respectively, then comes the nodes in the following 4 element blocks:
@@ -28,7 +28,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
 			node := info.DriverStatus[i*5+4]
 			name := node[0]
 			address := node[1]
-			swarmNodes = append(swarmNodes, &docker.SwarmNode{
+			swarmNodes = append(swarmNodes, &SwarmNode{
 				IP: strings.Split(address, ":")[0],
 				Addr: address,
 				Name: name,
@@ -39,7 +39,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
 	}
 }
 
-func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulServers []string) (string, error) {
+func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul configuration file for node %s.", node.Name)
 	server := false
@@ -106,7 +106,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string, node *docker.SwarmNode) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
@@ -151,7 +151,7 @@ func runConsulContainer(client *docker.DockerClient, name string, node *docker.S
 	return containerID, nil
 }
 
-func runSwarmAgentContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulIP string) (string, error) {
+func runSwarmAgentContainer(client *docker.DockerClient, name string, node *SwarmNode, consulIP string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://" + node.IP + ":8500/swarm", name)
 	hostConfig := docker.HostConfig{

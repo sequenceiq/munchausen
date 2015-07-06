@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/codegangsta/cli"
-	consul "github.com/hashicorp/consul/api"
-	docker "github.com/akanto/dockerclient"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"github.com/codegangsta/cli"
+	consul "github.com/hashicorp/consul/api"
+	docker "github.com/samalba/dockerclient"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -184,7 +184,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
 	}
 
-	var swarmNodes []*docker.SwarmNode
+	var swarmNodes []*SwarmNode
 	for i := 0; ; i++ {
 		if i >= MaxGetSwarmAgentsAttempts {
 			log.Infof("[bootstrap] Failed to get all Swarm nodes in %v attempts.", MaxGetSwarmAgentsAttempts)
@@ -209,7 +209,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	var wg sync.WaitGroup
 	for _, node := range swarmNodes {
 		wg.Add(1)
-		go func(node *docker.SwarmNode) {
+		go func(node *SwarmNode) {
 			defer wg.Done()
 			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers)
 		}(node)
@@ -220,7 +220,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 
 	for _, node := range swarmNodes {
 		wg.Add(1)
-		go func(node *docker.SwarmNode) {
+		go func(node *SwarmNode) {
 			defer wg.Done()
 			runConsulContainer(tmpSwarmClient, "consul", node)
 		}(node)
@@ -248,7 +248,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 
 	for _, node := range swarmNodes {
 		wg.Add(1)
-		go func(node *docker.SwarmNode) {
+		go func(node *SwarmNode) {
 			defer wg.Done()
 			runSwarmAgentContainer(tmpSwarmClient, "swarm-agent", node, consulServers[0])
 		}(node)

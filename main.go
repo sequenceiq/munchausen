@@ -32,7 +32,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "munchausen"
 	app.Usage = "Bootstraps a Swarm cluster with Consul"
-	app.Version = "0.0.1"
+	app.Version = "0.5.1"
 	app.Author = "SequenceIQ"
 
 	app.Flags = []cli.Flag{

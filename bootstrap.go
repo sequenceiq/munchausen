@@ -5,7 +5,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	consul "github.com/hashicorp/consul/api"
-	docker "github.com/martonsereg/dockerclient"
+	docker "github.com/akanto/dockerclient"
 	"os"
 	"strings"
 	"sync"
@@ -179,7 +179,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	time.Sleep(SecondsBetweenGetSwarmAgentsAttempts * time.Second)
 
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
-	tmpSwarmClient, err := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IpAddress+":3376", nil)
+	tmpSwarmClient, err := docker.NewDockerClient("http://" + tmpSwarmManagerContainer.NetworkSettings.IPAddress + ":3376", nil)
 	if err != nil {
 		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
 	}

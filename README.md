@@ -20,7 +20,11 @@ This looks like a chicken-and-egg problem, and this tool is supposed to solve it
 
 - The Consul-based Swarm manager is started on the same instance where the temporary manager was started.
 
-- The temporary Swarm manager is removed.
+- The temporary Swarm manager is removed. 
+
+#### Notes
+
+- *The Swarm managers (the temporary and the Consul-backed) are started on the node where the munchausen container runs (that's why the docker socket must be shared with the munchausen container)*
 
 ## Usage
 
@@ -28,10 +32,45 @@ The easiest way to get started is to run the docker container on one of the node
 
  ```
  docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
- sequenceiq/munchausen bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
+ sequenceiq/munchausen --debug bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
  ```
 
- *If the Docker HTTP/HTTPS API on the machine is exposed, it can be used to bootstrap the cluster from a remote location, the only requirement is a running docker daemon on each machine.*
+#### Notes
+
+ - Consul server IPs are usually common internal IP addresses. `node_ips` are usually internal addresses as well but with the docker port specified.
+
+ - The IP addresses of the consul servers must be listed in the `node_ip` list as well
+
+ - If the Docker HTTP/HTTPS API on the machine is exposed, it can be used to bootstrap the cluster from a remote location, the only requirement is a running docker daemon on each machine.
+
+#### Example
+
+If you have an internal network with 5 private ip addresses: `10.0.0.1, 10.0.0.2, ... 10.0.0.5`, the docker daemon is configured to listen on port 2375 (`-H=0.0.0.0:2375`) on every machine and you'd like to have the first 3 nodes as consul servers, the bootstrap command should look like this:
+
+ ```
+ docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
+ sequenceiq/munchausen --debug bootstrap --consulServers=10.0.0.1,10.0.0.2,10.0.0.3 10.0.0.1:2375,10.0.0.2:2375,10.0.0.3:2375,10.0.0.4:2375,10.0.0.5:2375
+ ```
+
+### Adding nodes
+
+ New nodes can be added to an existing Consul-Swarm cluster with the `add` command instead of `bootstrap`. Its usage is quite similar, there is only one difference - the `add` command doesn't create a new Consul cluster with new Consul servers, rather joins an existing one and adds only Consul agents. That's why the `--consulServers` switch is replaced with `--join`:
+
+
+ ```
+ docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
+ sequenceiq/munchausen --debug add --join=consul://<consul_ip>:8500 <node_ip1:2375>,<node_ip2:2375>... 
+ ```
+
+#### Example
+
+ If you'd like to add `10.0.0.6` and `10.0.0.7` to the cluster above and configured the docker daemon to listen on port 2375 on these 2 instances, run the following command:
+
+```
+ docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
+ sequenceiq/munchausen --debug bootstrap --join=consul://10.0.0.1:8500 10.0.0.6:2375,10.0.0.7:2375
+ ```
+
 
 ## Debug
 
@@ -49,10 +88,6 @@ DEBUG=1 munchausen bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node
 
 This is a work in progress, the following things will be added soon:
 
-- bootstrapping from a static file descriptor
-
 - support Swarm with TLS
 
-- explicitly setting which nodes are Consul servers
-
-- error handling
+- bootstrapping from a static file descriptor

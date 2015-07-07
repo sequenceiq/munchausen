@@ -23,6 +23,12 @@ type PortConfig struct {
 	HTTPS int
 }
 
+type DNSConfig struct {
+	AllowStale  bool              `json:"allow_stale"`
+	MaxStale    string            `json:"max_stale"`
+	NodeTTL     string            `json:"node_ttl"`
+}
+
 type ConsulConfig struct {
 	BootstrapExpect    int        `json:"bootstrap_expect"`
 	Server             bool       `json:"server"`
@@ -40,4 +46,5 @@ type ConsulConfig struct {
 	CertFile           string     `json:"cert_file,omitempty"`
 	KeyFile            string     `json:"key_file,omitempty"`
 	Ports              PortConfig `json:"ports"`
+	DNS                DNSConfig  `json:"dns_config"`
 }

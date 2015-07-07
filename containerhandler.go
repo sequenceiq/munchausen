@@ -61,6 +61,11 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 			HTTP:  8500,
 			HTTPS: -1,
 		},
+		DNS: DNSConfig{
+			AllowStale: true,
+			MaxStale:   "5m",
+			NodeTTL:    "1m",
+		},
 	}
 	if server {
 		log.Debugf("[bootstrap] Node %s is a server, adding bootstrap_expect: %v and server: true configuration options.", node.Name, len(consulServers))

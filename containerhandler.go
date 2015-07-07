@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"io/ioutil"
+	"regexp"
 	log "github.com/Sirupsen/logrus"
 	docker "github.com/samalba/dockerclient"
 )
@@ -39,7 +41,30 @@ func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 	}
 }
 
-func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string, consulLogLocation string) (string, error) {
+func determineDNSRecursors(fallbackDNSRecursors []string) ([]string) {
+	var dnsRecursors []string
+	if dat, err := ioutil.ReadFile("/etc/resolv.conf"); err == nil {
+		resolvContent := string(dat)
+		log.Debugf("[containerhandler] Loaded /etc/resolv.conf file: %s.", resolvContent)
+		r, _ := regexp.Compile("nameserver .*")
+		if nameserverLines := r.FindAllString(resolvContent, -1); nameserverLines != nil {
+			for _, nameserverLine := range nameserverLines {
+				log.Debugf("[containerhandler] Found nameserverline: %s.", nameserverLine)
+				dnsRecursor := strings.TrimSpace(strings.Split(nameserverLine, " ")[1])
+				log.Debugf("[containerhandler] Parsed DNS recursor: %s.", dnsRecursor)
+				dnsRecursors = append(dnsRecursors, dnsRecursor)
+			}
+		}
+	} else {
+		log.Warnf("[containerhandler] Failed to load /etc/resolv.conf")
+	}
+	if (fallbackDNSRecursors != nil) {
+		dnsRecursors = append(dnsRecursors, fallbackDNSRecursors...)
+	}
+	return dnsRecursors
+}
+
+func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string, consulLogLocation string, fallbackDNSRecursors []string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul configuration file for node %s.", node.Name)
 	server := false
@@ -51,13 +76,17 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 			joinIPs = append(joinIPs, consulServer)
 		}
 	}
+
+	dnsRecursors := determineDNSRecursors(fallbackDNSRecursors)
+	log.Infof("[containerhandler] Used DNSRecursor : %s.", dnsRecursors)
+
 	log.Debugf("[containerhandler] RetryJoin IPs for node %s: %s", node.Name, joinIPs)
 	consulConfig := ConsulConfig{
 		AdvertiseAddr:      strings.Split(node.Addr, ":")[0],
 		DataDir:            "/data",
 		UiDir:              "/ui",
 		ClientAddr:         "0.0.0.0",
-		DNSRecursor:        "8.8.8.8",
+		DNSRecursors:        dnsRecursors,
 		DisableUpdateCheck: true,
 		RetryJoin:          joinIPs,
 		Ports: PortConfig{

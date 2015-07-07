@@ -1,6 +1,6 @@
 #!/bin/bash
 
-: ${IMAGES:=sequenceiq/consul:v0.5.0-v4 swarm:0.3.0}
+: ${IMAGES:=sequenceiq/consul:v0.5.0-v5 swarm:0.3.0}
 : ${DEBUG:=1}
 
 debug() {

@@ -3,41 +3,45 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	docker "github.com/martonsereg/dockerclient"
 	"strconv"
 	"strings"
+	log "github.com/Sirupsen/logrus"
+	docker "github.com/samalba/dockerclient"
 )
 
-func getSwarmNodes(client *docker.DockerClient) ([]*docker.SwarmNode, error) {
+func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 	if info, err := client.Info(); err != nil {
 		return nil, fmt.Errorf("Failed to retrieve info from tmp swarm manager: %s", err)
 	} else {
-		var swarmNodes []*docker.SwarmNode
+		var swarmNodes []*SwarmNode
 		var nodeCount int
 		// Swarm returns nodes and their info in a 2 dimensional json array basically unstructured
 		// The first three arrays contain the Strategy ("\bStrategy"), Filters ("\bFilters") and Nodes ("\bNodes") respectively, then comes the nodes in the following 4 element blocks:
 		// [name, addr],[" └ Containers", containers],[" └ Reserved CPUs", cpu],[" └ Reserved Memory", memory],[name, addr],[" └ Containers"],...
 		for i := 0; i < len(info.DriverStatus); i++ {
-			if info.DriverStatus[i][0] == "\bNodes" {
+			if info.DriverStatus[i][0] == "\u0008Nodes" {
 				nodeCount, _ = strconv.Atoi(info.DriverStatus[i][1])
 				break
 			}
 		}
 		for i := 0; i < nodeCount; i++ {
-			swarmNodes = append(swarmNodes, &docker.SwarmNode{
-				Addr: info.DriverStatus[i*4+3][1],
-				Name: info.DriverStatus[i*4+3][0],
+			node := info.DriverStatus[i*5+4]
+			name := node[0]
+			address := node[1]
+			swarmNodes = append(swarmNodes, &SwarmNode{
+				IP: strings.Split(address, ":")[0],
+				Addr: address,
+				Name: name,
 			})
 		}
-		log.Infof("[bootstrap] Temporary Swarm manager found %v nodes", len(swarmNodes))
+		log.Infof("[containerhandler] Temporary Swarm manager found %v nodes", len(swarmNodes))
 		return swarmNodes, nil
 	}
 }
 
-func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulServers []string) (string, error) {
+func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
-	log.Debugf("[bootstrap] Creating consul configuration file for node %s.", node.Name)
+	log.Debugf("[containerhandler] Creating consul configuration file for node %s.", node.Name)
 	server := false
 	var joinIPs []string
 	for _, consulServer := range consulServers {
@@ -47,7 +51,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 			joinIPs = append(joinIPs, consulServer)
 		}
 	}
-	log.Debugf("[bootstrap] RetryJoin IPs for node %s: %s", node.Name, joinIPs)
+	log.Debugf("[containerhandler] RetryJoin IPs for node %s: %s", node.Name, joinIPs)
 	consulConfig := ConsulConfig{
 		AdvertiseAddr:      strings.Split(node.Addr, ":")[0],
 		DataDir:            "/data",
@@ -68,7 +72,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		},
 	}
 	if server {
-		log.Debugf("[bootstrap] Node %s is a server, adding bootstrap_expect: %v and server: true configuration options.", node.Name, len(consulServers))
+		log.Debugf("[containerhandler] Node %s is a server, adding bootstrap_expect: %v and server: true configuration options.", node.Name, len(consulServers))
 		consulConfig.BootstrapExpect = len(consulServers)
 		consulConfig.Server = true
 	}
@@ -76,7 +80,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		Binds: []string{"/etc/consul:/config"},
 	}
 	consulConfigJson, _ := json.MarshalIndent(consulConfig, "", "  ")
-	log.Debugf("[bootstrap] Consul configuration file created for node %s", node.Name)
+	log.Debugf("[containerhandler] Consul configuration file created for node %s", node.Name)
 	config := &docker.ContainerConfig{
 		Image:      "gliderlabs/alpine:3.1",
 		Cmd:        []string{"sh", "-c", "echo '" + string(consulConfigJson) + "' > /config/consul.json && cat /config/consul.json"},
@@ -90,21 +94,21 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	}
 	id, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
-		log.Errorf("[bootstrap] Failed to create copy container: %s", createErr)
+		log.Errorf("[containerhandler] Failed to create copy container: %s", createErr)
 		return "", createErr
 	}
-	log.Debugf("[bootstrap] Created consul config copy container successfully, trying to start it. [ID: %s]", id)
+	log.Debugf("[containerhandler] Created consul config copy container successfully, trying to start it. [ID: %s]", id)
 	if startErr := client.StartContainer(id, &hostConfig); startErr != nil {
-		log.Errorf("[bootstrap] Failed to start copy container: %s", startErr)
+		log.Errorf("[containerhandler] Failed to start copy container: %s", startErr)
 		return "", startErr
 	}
-	log.Infof("[bootstrap] Consul config copied to node: %s [ID: %s]", node.Name, id)
+	log.Infof("[containerhandler] Consul config copied to node: %s [ID: %s]", node.Name, id)
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string, node *docker.SwarmNode) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
-	log.Debugf("[bootstrap] Creating consul container [Name: %s]", name)
+	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
 	portBindings := make(map[string][]docker.PortBinding)
 	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
@@ -135,27 +139,27 @@ func runConsulContainer(client *docker.DockerClient, name string, node *docker.S
 	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
-		log.Errorf("[bootstrap] Failed to create consul container: %s", createErr)
+		log.Errorf("[containerhandler] Failed to create consul container: %s", createErr)
 		return "", createErr
 	}
-	log.Debugf("[bootstrap] Created consul container successfully, trying to start it. [Name: %s]", name)
+	log.Debugf("[containerhandler] Created consul container successfully, trying to start it. [Name: %s]", name)
 	if startErr := client.StartContainer(containerID, &hostConfig); startErr != nil {
-		log.Errorf("[bootstrap] Failed to start copy container: %s", startErr)
+		log.Errorf("[containerhandler] Failed to start copy container: %s", startErr)
 		return "", startErr
 	}
-	log.Infof("[bootstrap] Started consul container [Name: %s, ID: %s]", name, containerID)
+	log.Infof("[containerhandler] Started consul container [Name: %s, ID: %s]", name, containerID)
 	return containerID, nil
 }
 
-func runSwarmAgentContainer(client *docker.DockerClient, name string, node *docker.SwarmNode, consulIP string) (string, error) {
+func runSwarmAgentContainer(client *docker.DockerClient, name string, node *SwarmNode, consulIP string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
-	log.Debugf("[bootstrap] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://"+consulIP+":8500/swarm", name)
+	log.Debugf("[containerhandler] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://" + node.IP + ":8500/swarm", name)
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
 	config := &docker.ContainerConfig{
 		Image:      SwarmImage,
-		Cmd:        []string{"join", "--addr=" + node.Addr, "consul://" + consulIP + ":8500/swarm"},
+		Cmd:        []string{"join", "--addr=" + node.Addr, "consul://" + node.IP + ":8500/swarm"},
 		Env:        []string{"constraint:node==" + node.Name},
 		HostConfig: hostConfig,
 	}
@@ -166,20 +170,20 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *dock
 	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
-		log.Errorf("[bootstrap] Failed to create swarm agent container: %s", createErr)
+		log.Errorf("[containerhandler] Failed to create swarm agent container: %s", createErr)
 		return "", createErr
 	}
-	log.Debugf("[bootstrap] Created swarm agent container successfully, trying to start it. [Name: %s]", name)
+	log.Debugf("[containerhandler] Created swarm agent container successfully, trying to start it. [Name: %s]", name)
 	if startErr := client.StartContainer(containerID, &hostConfig); startErr != nil {
-		log.Errorf("[bootstrap] Failed to start swarm agent container: %s", startErr)
+		log.Errorf("[containerhandler] Failed to start swarm agent container: %s", startErr)
 		return "", startErr
 	}
-	log.Infof("[bootstrap] Started swarm agent container on node: %s [Name: %s, ID: %s]", node.Name, name, containerID)
+	log.Infof("[containerhandler] Started swarm agent container on node: %s [Name: %s, ID: %s]", node.Name, name, containerID)
 	return containerID, nil
 }
 
 func runSwarmManagerContainer(client *docker.DockerClient, name string, discoveryParam string, bindPort bool) (string, error) {
-	log.Debugf("[bootstrap] Creating swarm manager container with discovery parameter: %s", discoveryParam)
+	log.Debugf("[containerhandler] Creating swarm manager container with discovery parameter: %s", discoveryParam)
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
@@ -203,20 +207,20 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		HostConfig:   hostConfig,
 	}
 	if err := client.RemoveContainer(name, true, true); err != nil {
-		log.Debugf("Couldn't remove container: %s: %s", name, err)
+		log.Debugf("[containerhandler] Couldn't remove container: %s: %s", name, err)
 	} else {
-		log.Debugf("Force removed container with name %s.", name)
+		log.Debugf("[containerhandler] Force removed container with name %s.", name)
 	}
 	containerID, createErr := client.CreateContainer(config, name)
 	if createErr != nil {
-		log.Errorf("[bootstrap] Failed to create Swarm manager container: %s", createErr)
+		log.Errorf("[containerhandler] Failed to create Swarm manager container: %s", createErr)
 		return "", createErr
 	}
-	log.Debugf("[bootstrap] Created swarm manager container successfully, trying to start it.  [Name: %s]", name)
+	log.Debugf("[containerhandler] Created swarm manager container successfully, trying to start it.  [Name: %s]", name)
 	if startErr := client.StartContainer(containerID, &hostConfig); startErr != nil {
-		log.Errorf("[bootstrap] Failed to start Swarm manager container: %s", startErr)
+		log.Errorf("[containerhandler] Failed to start Swarm manager container: %s", startErr)
 		return "", startErr
 	}
-	log.Infof("[bootstrap] Started swarm manager container [Name: %s, ID: %s]", name, containerID)
+	log.Infof("[containerhandler] Started swarm manager container [Name: %s, ID: %s]", name, containerID)
 	return containerID, nil
 }

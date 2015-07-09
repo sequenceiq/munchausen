@@ -39,7 +39,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 	}
 }
 
-func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string) (string, error) {
+func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string, consulLogLocation string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul configuration file for node %s.", node.Name)
 	server := false
@@ -76,8 +76,12 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		consulConfig.BootstrapExpect = len(consulServers)
 		consulConfig.Server = true
 	}
+	bindsArray := []string{"/etc/consul:/config"}
+	if len(consulLogLocation) != 0 {
+		bindsArray = append(bindsArray, fmt.Sprintf("%s:/var/log/consul", consulLogLocation))
+	}
 	hostConfig := docker.HostConfig{
-		Binds: []string{"/etc/consul:/config"},
+		Binds: bindsArray,
 	}
 	consulConfigJson, _ := json.MarshalIndent(consulConfig, "", "  ")
 	log.Debugf("[containerhandler] Consul configuration file created for node %s", node.Name)
@@ -106,7 +110,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode, consulLogLocation string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
@@ -114,8 +118,12 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
 	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
 
+	bindsArray := []string{"/etc/consul/consul.json:/config/consul.json"}
+	if len(consulLogLocation) != 0 {
+		bindsArray = append(bindsArray, fmt.Sprintf("%s:/var/log/consul", consulLogLocation))
+	}
 	hostConfig := docker.HostConfig{
-		Binds:         []string{"/etc/consul/consul.json:/config/consul.json"},
+		Binds:         bindsArray,
 		NetworkMode:   "host",
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 		PortBindings:  portBindings,

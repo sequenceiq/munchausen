@@ -26,6 +26,11 @@ var (
 		Name:  "wait",
 		Usage: "Waits approximately this many seconds for the docker daemons to start. Useful when Munchausen is started before all the docker daemons are started",
 	}
+	flConsulLogLocation = cli.StringFlag{
+		Name: "consulLogLocation",
+		Value: "",
+		Usage: "Consul log location on local filesystem",
+	}
 )
 
 func main() {
@@ -52,14 +57,14 @@ func main() {
 			Name:      "bootstrap",
 			ShortName: "b",
 			Usage:     "Bootstraps the cluster. A comma separated list of Docker daemon addresses must be passed as the first argument.",
-			Flags:     []cli.Flag{flConsulServers, flWait},
+			Flags:     []cli.Flag{flConsulServers, flWait, flConsulLogLocation},
 			Action:    bootstrap,
 		},
 		{
 			Name:      "add",
 			ShortName: "a",
 			Usage:     "Adds new nodes to a Consul based Swarm cluster. A comma separated list of the new Docker daemons must be passed as the first argument.",
-			Flags:     []cli.Flag{flConsulJoin, flWait},
+			Flags:     []cli.Flag{flConsulJoin, flWait, flConsulLogLocation},
 			Action:    add,
 		},
 	}

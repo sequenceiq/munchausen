@@ -33,6 +33,7 @@ func bootstrap(c *cli.Context) {
 	nodesAsString := c.Args()[0]
 	consulServers := strings.Split(c.String(flConsulServers.Name), ",")
 	wait := c.Int(flWait.Name)
+	consulLogLocation := c.String(flConsulLogLocation.Name)
 
 	nodes, err := validateNodeUris(nodesAsString)
 	if err != nil {
@@ -66,7 +67,7 @@ func bootstrap(c *cli.Context) {
 		nodes = waitForDockerDaemons(wait, nodes)
 		log.Infof("[bootstrap] Continuing with %v nodes: %s", len(nodes), nodes)
 	}
-	bootstrapNewNodes(nodesAsString, consulServers, nodes, true)
+	bootstrapNewNodes(nodesAsString, consulServers, nodes, consulLogLocation, true)
 
 	log.Info("[bootstrap] Finished Swarm bootstrapping.")
 	log.Info("[bootstrap] To try the new Swarm Manager run 'docker -H tcp://127.0.0.1:3376 info'")
@@ -84,6 +85,7 @@ func add(c *cli.Context) {
 
 	nodesAsString := c.Args()[0]
 	wait := c.Int(flWait.Name)
+	consulLogLocation := c.String(flConsulLogLocation.Name)
 
 	consulJoin := c.String(flConsulJoin.Name)
 	if strings.HasPrefix(consulJoin, "consul://") {
@@ -110,7 +112,7 @@ func add(c *cli.Context) {
 		nodes = waitForDockerDaemons(wait, nodes)
 		log.Infof("[bootstrap] Continuing with %v nodes: %s", len(nodes), nodes)
 	}
-	bootstrapNewNodes(nodesAsString, peers, nodes, false)
+	bootstrapNewNodes(nodesAsString, peers, nodes, consulLogLocation, false)
 
 	log.Info("[bootstrap] Finished adding new nodes to the Consul-Swarm cluster.")
 }
@@ -158,7 +160,7 @@ func waitForDockerDaemons(wait int, nodes []string) []string {
 	}
 }
 
-func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []string, startSwarmManager bool) {
+func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []string, consulLogLocation string, startSwarmManager bool) {
 	log.Debug("[bootstrap] Creating docker client with docker.sock.")
 	client, err := docker.NewDockerClient("unix:///var/run/docker.sock", nil)
 	if err != nil {
@@ -211,7 +213,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		wg.Add(1)
 		go func(node *SwarmNode) {
 			defer wg.Done()
-			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers)
+			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers, consulLogLocation)
 		}(node)
 	}
 
@@ -222,7 +224,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		wg.Add(1)
 		go func(node *SwarmNode) {
 			defer wg.Done()
-			runConsulContainer(tmpSwarmClient, "consul", node)
+			runConsulContainer(tmpSwarmClient, "consul", node, consulLogLocation)
 		}(node)
 	}
 

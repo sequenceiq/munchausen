@@ -36,7 +36,7 @@ type ConsulConfig struct {
 	DataDir            string     `json:"data_dir"`
 	UiDir              string     `json:"ui_dir"`
 	ClientAddr         string     `json:"client_addr"`
-	DNSRecursor        string     `json:"recursor"`
+	DNSRecursors       []string   `json:"recursors"`
 	DisableUpdateCheck bool       `json:"disable_update_check"`
 	RetryJoin          []string   `json:"retry_join"`
 	EncryptKey         string     `json:"encrypt,omitempty"`

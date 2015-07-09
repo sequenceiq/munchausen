@@ -64,7 +64,7 @@ func validateNodeUris(nodesArg string) ([]string, error) {
 func validateConsulServerAddresses(consulServers []string) error {
 	for _, serverAddress := range consulServers {
 		if net.ParseIP(serverAddress) == nil {
-			return fmt.Errorf("[bootstrap] Consul server address %s is not a valid IP address", serverAddress)
+			return fmt.Errorf("[validation] Consul server address %s is not a valid IP address", serverAddress)
 		}
 	}
 	return nil

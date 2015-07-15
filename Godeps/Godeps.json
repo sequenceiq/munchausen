@@ -1,0 +1,30 @@
+{
+	"ImportPath": "github.com/sequenceiq/swarm-bootstrap",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.8.2-20-gab7e46e",
+			"Rev": "ab7e46ea22bd379e660230844f96d20f1dabc21a"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-135-gf998261",
+			"Rev": "f9982619ccace7df963bb7f6d1de3a6f014ff709"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/units",
+			"Comment": "v1.4.1-4405-g26a35dd",
+			"Rev": "26a35dd09b4faf39a99ff224f5cd4e14ae368585"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/consul/api",
+			"Comment": "v0.5.2-143-ge37b5ec",
+			"Rev": "e37b5ecb692b4154927e3386e40e745436c78c93"
+		},
+		{
+			"ImportPath": "github.com/samalba/dockerclient",
+			"Rev": "3342e9407a459d3cb369a81f8aa23b6cbe3fa8da"
+		}
+	]
+}

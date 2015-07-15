@@ -84,6 +84,14 @@ or provide an environment variable:
 DEBUG=1 munchausen bootstrap --consulServers=<server_ip1>,<server_ip2>,... <node_ip1:2375>,<node_ip2:2375>... 
 ```
 
+## Dependency management
+
+Munchausen uses [Godep](https://github.com/tools/godep) for dependency management. You can install it and download the configured dependency versions with:
+```
+go get github.com/tools/godep
+godep restore
+```
+
 ## Notes
 
 This is a work in progress, the following things will be added soon:

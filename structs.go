@@ -4,7 +4,7 @@ import ()
 
 const (
 	ConsulImage           = "sequenceiq/consul:v0.5.0-v5"
-	SwarmImage            = "swarm:0.4.0"
+	SwarmImage            = "swarm:1.0.0"
 	TmpSwarmContainerName = "tmp-swarm-manager"
 	SwarmContainerName    = "swarm-manager"
 )

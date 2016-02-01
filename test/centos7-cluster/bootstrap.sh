@@ -8,7 +8,7 @@ debug() {
 }
 
 install_utils() {
-  yum -y install deltarpm unzip curl git wget bind-utils ntp golang
+  yum -y install deltarpm unzip curl git wget bind-utils ntp golang tee
 }
 
 permissive_iptables() {
@@ -26,17 +26,19 @@ permissive_selinux() {
 }
 
 install_docker() {
-  curl -O -sSL https://get.docker.com/rpm/1.7.0/centos-7/RPMS/x86_64/docker-engine-1.7.0-1.el7.centos.x86_64.rpm
-  yum -y localinstall --nogpgcheck docker-engine-1.7.0-1.el7.centos.x86_64.rpm
-  # need to check whether we really need these (GCP / OpenStack we don't)
-  yum install -y device-mapper-event-libs device-mapper-event device-mapper-event-devel
-  service docker start
-  service docker stop
-  sed -i '/^ExecStart/s/$/ -H tcp:\/\/0.0.0.0:2376 --selinux-enabled --storage-driver=devicemapper --storage-opt=dm.basesize=30G/' /usr/lib/systemd/system/docker.service
-  rm -rf /var/lib/docker
+  tee /etc/yum.repos.d/docker.repo <<-'EOF'
+[dockerrepo]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/$releasever/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.dockerproject.org/gpg
+EOF
+  yum -y install docker-engine
+  sed -i '/^ExecStart/s/$/ -H tcp:\/\/0.0.0.0:2376 --selinux-enabled=false --storage-driver=overlay/' /usr/lib/systemd/system/docker.service
   systemctl daemon-reload
-  service docker start
-  systemctl enable docker.service
+  systemctl start docker
+  systemctl enable docker
 }
 
 pull_images() {

@@ -9,22 +9,30 @@
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-135-gf998261",
-			"Rev": "f9982619ccace7df963bb7f6d1de3a6f014ff709"
+			"Rev": "cf1f63a7274872768d4037305d572b70b1199397"
 		},
 		{
-			"ImportPath": "github.com/docker/docker/pkg/units",
-			"Comment": "v1.4.1-4405-g26a35dd",
-			"Rev": "26a35dd09b4faf39a99ff224f5cd4e14ae368585"
+			"ImportPath": "github.com/docker/go-units",
+			"Comment": "v0.1.0-23-g5d2041e",
+			"Rev": "5d2041e26a699eaca682e2ea41c8f891e1060444"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/consul/api",
-			"Comment": "v0.5.2-143-ge37b5ec",
-			"Rev": "e37b5ecb692b4154927e3386e40e745436c78c93"
+			"Comment": "v0.6.3",
+			"Rev": "c933efde50d25395c7b5a42167578fda603d43d8"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/go-cleanhttp",
+			"Rev": "ce617e79981a8fff618bb643d155133a8f38db96"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/serf/coordinate",
+			"Comment": "v0.7.0-12-ge4ec8cc",
+			"Rev": "e4ec8cc423bbe20d26584b96efbeb9102e16d05f"
 		},
 		{
 			"ImportPath": "github.com/samalba/dockerclient",
-			"Rev": "3342e9407a459d3cb369a81f8aa23b6cbe3fa8da"
+			"Rev": "3c5f87482db1f82cf350f62aa5214aabd6016502"
 		}
 	]
 }

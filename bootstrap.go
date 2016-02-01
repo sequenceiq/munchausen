@@ -35,7 +35,7 @@ func bootstrap(c *cli.Context) {
 	wait := c.Int(flWait.Name)
 	consulLogLocation := c.String(flConsulLogLocation.Name)
 	var fallbackDNSRecursors []string
-	if (len(c.String(flFallbackDNSRecursors.Name)) > 0) {
+	if len(c.String(flFallbackDNSRecursors.Name)) > 0 {
 		fallbackDNSRecursors = strings.Split(c.String(flFallbackDNSRecursors.Name), ",")
 	}
 
@@ -91,7 +91,7 @@ func add(c *cli.Context) {
 	wait := c.Int(flWait.Name)
 	consulLogLocation := c.String(flConsulLogLocation.Name)
 	var fallbackDNSRecursors []string
-	if (len(c.String(flFallbackDNSRecursors.Name)) > 0) {
+	if len(c.String(flFallbackDNSRecursors.Name)) > 0 {
 		fallbackDNSRecursors = strings.Split(c.String(flFallbackDNSRecursors.Name), ",")
 	}
 
@@ -150,7 +150,7 @@ func waitForDockerDaemons(wait int, nodes []string) []string {
 					log.Debugf("[bootstrap] Docker daemon on node %s has already responded, not pinging it again.", node)
 					return
 				}
-				client, err := docker.NewDockerClientTimeout("http://"+node, nil, time.Duration(5*time.Second))
+				client, err := docker.NewDockerClientTimeout("http://"+node, nil, time.Duration(5*time.Second), nil)
 				if err != nil {
 					log.Debugf("[bootstrap] Couldn't create client for docker daemon (%s): %s", node, err)
 					return
@@ -189,7 +189,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 	time.Sleep(SecondsBetweenGetSwarmAgentsAttempts * time.Second)
 
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
-	tmpSwarmClient, err := docker.NewDockerClient("http://" + tmpSwarmManagerContainer.NetworkSettings.IPAddress + ":3376", nil)
+	tmpSwarmClient, err := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IPAddress+":3376", nil)
 	if err != nil {
 		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
 	}

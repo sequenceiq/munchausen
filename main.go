@@ -27,12 +27,12 @@ var (
 		Usage: "Waits approximately this many seconds for the docker daemons to start. Useful when Munchausen is started before all the docker daemons are started",
 	}
 	flConsulLogLocation = cli.StringFlag{
-		Name: "consulLogLocation",
+		Name:  "consulLogLocation",
 		Value: "",
 		Usage: "Consul log location on local filesystem",
 	}
 	flFallbackDNSRecursors = cli.StringFlag{
-		Name: "fallbackDNSRecursors",
+		Name:  "fallbackDNSRecursors",
 		Value: "",
 		Usage: "Additional DNS recursors to Consul config as a comma separated list",
 	}

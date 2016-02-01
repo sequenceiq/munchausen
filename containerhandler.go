@@ -31,7 +31,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 			name := node[0]
 			address := node[1]
 			swarmNodes = append(swarmNodes, &SwarmNode{
-				IP: strings.Split(address, ":")[0],
+				IP:   strings.Split(address, ":")[0],
 				Addr: address,
 				Name: name,
 			})
@@ -41,7 +41,7 @@ func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 	}
 }
 
-func determineDNSRecursors(fallbackDNSRecursors []string) ([]string) {
+func determineDNSRecursors(fallbackDNSRecursors []string) []string {
 	var dnsRecursors []string
 	if dat, err := ioutil.ReadFile("/etc/resolv.conf"); err == nil {
 		resolvContent := string(dat)
@@ -58,7 +58,7 @@ func determineDNSRecursors(fallbackDNSRecursors []string) ([]string) {
 	} else {
 		log.Warnf("[containerhandler] Failed to load /etc/resolv.conf")
 	}
-	if (fallbackDNSRecursors != nil) {
+	if fallbackDNSRecursors != nil {
 		dnsRecursors = append(dnsRecursors, fallbackDNSRecursors...)
 	}
 	return dnsRecursors
@@ -86,7 +86,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		DataDir:            "/data",
 		UiDir:              "/ui",
 		ClientAddr:         "0.0.0.0",
-		DNSRecursors:        dnsRecursors,
+		DNSRecursors:       dnsRecursors,
 		DisableUpdateCheck: true,
 		RetryJoin:          joinIPs,
 		Ports: PortConfig{
@@ -125,7 +125,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	} else {
 		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
 	}
-	id, createErr := client.CreateContainer(config, name)
+	id, createErr := client.CreateContainer(config, name, nil)
 	if createErr != nil {
 		log.Errorf("[containerhandler] Failed to create copy container: %s", createErr)
 		return "", createErr
@@ -174,7 +174,7 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 	} else {
 		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
 	}
-	containerID, createErr := client.CreateContainer(config, name)
+	containerID, createErr := client.CreateContainer(config, name, nil)
 	if createErr != nil {
 		log.Errorf("[containerhandler] Failed to create consul container: %s", createErr)
 		return "", createErr
@@ -190,7 +190,7 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 
 func runSwarmAgentContainer(client *docker.DockerClient, name string, node *SwarmNode, consulIP string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
-	log.Debugf("[containerhandler] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://" + node.IP + ":8500/swarm", name)
+	log.Debugf("[containerhandler] Creating swarm agent container on node %s with consul address: %s  [Name: %s]", node.Name, "consul://"+node.IP+":8500/swarm", name)
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
@@ -205,7 +205,7 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *Swar
 	} else {
 		log.Debugf("Force removed container with name %s/%s.", node.Name, name)
 	}
-	containerID, createErr := client.CreateContainer(config, name)
+	containerID, createErr := client.CreateContainer(config, name, nil)
 	if createErr != nil {
 		log.Errorf("[containerhandler] Failed to create swarm agent container: %s", createErr)
 		return "", createErr
@@ -248,7 +248,7 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 	} else {
 		log.Debugf("[containerhandler] Force removed container with name %s.", name)
 	}
-	containerID, createErr := client.CreateContainer(config, name)
+	containerID, createErr := client.CreateContainer(config, name, nil)
 	if createErr != nil {
 		log.Errorf("[containerhandler] Failed to create Swarm manager container: %s", createErr)
 		return "", createErr

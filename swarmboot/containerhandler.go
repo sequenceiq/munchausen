@@ -1,14 +1,14 @@
-package main
+package swarmboot
 
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
-	"io/ioutil"
-	"regexp"
 	log "github.com/Sirupsen/logrus"
 	docker "github.com/samalba/dockerclient"
+	"io/ioutil"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
@@ -20,21 +20,26 @@ func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {
 		// Swarm returns nodes and their info in a 2 dimensional json array basically unstructured
 		// The first three arrays contain the Strategy ("\bStrategy"), Filters ("\bFilters") and Nodes ("\bNodes") respectively, then comes the nodes in the following 4 element blocks:
 		// [name, addr],[" └ Containers", containers],[" └ Reserved CPUs", cpu],[" └ Reserved Memory", memory],[name, addr],[" └ Containers"],...
+
 		for i := 0; i < len(info.DriverStatus); i++ {
-			if info.DriverStatus[i][0] == "\u0008Nodes" {
+			outputLine := info.DriverStatus[i][0]
+			log.Debugf(outputLine)
+			if outputLine == "\u0008Nodes" {
 				nodeCount, _ = strconv.Atoi(info.DriverStatus[i][1])
 				break
 			}
 		}
 		for i := 0; i < nodeCount; i++ {
-			node := info.DriverStatus[i*5+4]
+			node := info.DriverStatus[i*8+4]
 			name := node[0]
 			address := node[1]
-			swarmNodes = append(swarmNodes, &SwarmNode{
+			swarmNode := SwarmNode{
 				IP:   strings.Split(address, ":")[0],
 				Addr: address,
 				Name: name,
-			})
+			}
+			log.Debugf("[containerhandler] SwarmNode: %s", swarmNode)
+			swarmNodes = append(swarmNodes, &swarmNode)
 		}
 		log.Infof("[containerhandler] Temporary Swarm manager found %v nodes", len(swarmNodes))
 		return swarmNodes, nil
@@ -64,7 +69,7 @@ func determineDNSRecursors(fallbackDNSRecursors []string) []string {
 	return dnsRecursors
 }
 
-func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string, consulLogLocation string, fallbackDNSRecursors []string) (string, error) {
+func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string, fallbackDNSRecursors []string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul configuration file for node %s.", node.Name)
 	server := false
@@ -84,7 +89,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	consulConfig := ConsulConfig{
 		AdvertiseAddr:      strings.Split(node.Addr, ":")[0],
 		DataDir:            "/data",
-		UiDir:              "/ui",
+		Ui:                 true,
 		ClientAddr:         "0.0.0.0",
 		DNSRecursors:       dnsRecursors,
 		DisableUpdateCheck: true,
@@ -106,14 +111,12 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 		consulConfig.Server = true
 	}
 	bindsArray := []string{"/etc/consul:/config"}
-	if len(consulLogLocation) != 0 {
-		bindsArray = append(bindsArray, fmt.Sprintf("%s:/var/log/consul", consulLogLocation))
-	}
+
 	hostConfig := docker.HostConfig{
 		Binds: bindsArray,
 	}
 	consulConfigJson, _ := json.MarshalIndent(consulConfig, "", "  ")
-	log.Debugf("[containerhandler] Consul configuration file created for node %s", node.Name)
+	log.Debugf("[containerhandler] Consul configuration file created for node: %s", node.Name)
 	config := &docker.ContainerConfig{
 		Image:      "gliderlabs/alpine:3.1",
 		Cmd:        []string{"sh", "-c", "echo '" + string(consulConfigJson) + "' > /config/consul.json && cat /config/consul.json"},
@@ -139,36 +142,52 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode, consulLogLocation string) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
 	portBindings := make(map[string][]docker.PortBinding)
-	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
+	portBindings["53/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "53"}}
+	portBindings["8300/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
+	portBindings["8300/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
+	portBindings["8301/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
+	portBindings["8301/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
+	portBindings["8302/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
+	portBindings["8302/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
 	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
+	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
 
 	bindsArray := []string{"/etc/consul/consul.json:/config/consul.json"}
-	if len(consulLogLocation) != 0 {
-		bindsArray = append(bindsArray, fmt.Sprintf("%s:/var/log/consul", consulLogLocation))
-	}
+
 	hostConfig := docker.HostConfig{
 		Binds:         bindsArray,
-		NetworkMode:   "host",
+		NetworkMode:   "bridge",
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 		PortBindings:  portBindings,
 	}
 
 	exposedPorts := make(map[string]struct{})
 	var empty struct{}
-	exposedPorts["8500/tcp"] = empty
+	exposedPorts["53/udp"] = empty
+	exposedPorts["8300/tcp"] = empty
+	exposedPorts["8300/udp"] = empty
+	exposedPorts["8301/tcp"] = empty
+	exposedPorts["8301/udp"] = empty
+	exposedPorts["8302/tcp"] = empty
+	exposedPorts["8302/udp"] = empty
 	exposedPorts["8400/tcp"] = empty
+	exposedPorts["8500/tcp"] = empty
 
-	config := &docker.ContainerConfig{
+	var config *docker.ContainerConfig;
+
+	config = &docker.ContainerConfig{
 		Image:        ConsulImage,
 		ExposedPorts: exposedPorts,
 		Env:          []string{"constraint:node==" + node.Name},
 		HostConfig:   hostConfig,
+		Cmd:          []string{"agent", "-config-dir", "/config"},
 	}
+
 	if err := client.RemoveContainer(fmt.Sprintf("%s/%s", node.Name, name), true, true); err != nil {
 		log.Debugf("Couldn't remove container: %s/%s: %s", node.Name, name, err)
 	} else {
@@ -194,6 +213,7 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *Swar
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
+
 	config := &docker.ContainerConfig{
 		Image:      SwarmImage,
 		Cmd:        []string{"join", "--addr=" + node.Addr, "consul://" + node.IP + ":8500/swarm"},
@@ -219,18 +239,17 @@ func runSwarmAgentContainer(client *docker.DockerClient, name string, node *Swar
 	return containerID, nil
 }
 
-func runSwarmManagerContainer(client *docker.DockerClient, name string, discoveryParam string, bindPort bool) (string, error) {
+func runSwarmManagerContainer(client *docker.DockerClient, name string, discoveryParam string, exposedPort string) (string, error) {
 	log.Debugf("[containerhandler] Creating swarm manager container with discovery parameter: %s", discoveryParam)
 	hostConfig := docker.HostConfig{
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
-	if bindPort {
-		portBindings := make(map[string][]docker.PortBinding)
-		portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "3376"}}
-		hostConfig = docker.HostConfig{
-			PortBindings:  portBindings,
-			RestartPolicy: docker.RestartPolicy{Name: "always"},
-		}
+
+	portBindings := make(map[string][]docker.PortBinding)
+	portBindings["3376/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: exposedPort}}
+	hostConfig = docker.HostConfig{
+		PortBindings:  portBindings,
+		RestartPolicy: docker.RestartPolicy{Name: "always"},
 	}
 
 	exposedPorts := make(map[string]struct{})
@@ -243,8 +262,9 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		ExposedPorts: exposedPorts,
 		HostConfig:   hostConfig,
 	}
+	client.PullImage(SwarmImage, nil)
 	if err := client.RemoveContainer(name, true, true); err != nil {
-		log.Debugf("[containerhandler] Couldn't remove container: %s: %s", name, err)
+		log.Debugf("[containerhandler] Couldn't remove container: %s: %s", name, strings.TrimSpace(err.Error()))
 	} else {
 		log.Debugf("[containerhandler] Force removed container with name %s.", name)
 	}

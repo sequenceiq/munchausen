@@ -1,15 +1,16 @@
-package main
+package swarmboot
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"sync"
-	"time"
+	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	consul "github.com/hashicorp/consul/api"
 	docker "github.com/samalba/dockerclient"
-	log "github.com/Sirupsen/logrus"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -20,23 +21,23 @@ const (
 	SecondsBetweenGetSwarmAgentsAttempts = 5
 )
 
-func bootstrap(c *cli.Context) {
+func Bootstrap(c *cli.Context) {
 
 	if len(c.Args()) != 1 {
 		log.Fatalf("[bootstrap] Nodes must be provided as a comma separated list without whitespace. See '%s bootstrap --help'.", c.App.Name)
 	}
 
-	if len(c.String(flConsulServers.Name)) == 0 {
+	if len(c.String(FlConsulServers.Name)) == 0 {
 		log.Fatalf("[bootstrap] --consulServers is required. See '%s bootstrap --help'.", c.App.Name)
 	}
 
 	nodesAsString := c.Args()[0]
-	consulServers := strings.Split(c.String(flConsulServers.Name), ",")
-	wait := c.Int(flWait.Name)
-	consulLogLocation := c.String(flConsulLogLocation.Name)
+	dockerDaemonUrl := dockerDaemonUrl(c)
+	consulServers := strings.Split(c.String(FlConsulServers.Name), ",")
+	wait := c.Int(FlWait.Name)
 	var fallbackDNSRecursors []string
-	if len(c.String(flFallbackDNSRecursors.Name)) > 0 {
-		fallbackDNSRecursors = strings.Split(c.String(flFallbackDNSRecursors.Name), ",")
+	if len(c.String(FlFallbackDNSRecursors.Name)) > 0 {
+		fallbackDNSRecursors = strings.Split(c.String(FlFallbackDNSRecursors.Name), ",")
 	}
 
 	nodes, err := validateNodeUris(nodesAsString)
@@ -71,31 +72,32 @@ func bootstrap(c *cli.Context) {
 		nodes = waitForDockerDaemons(wait, nodes)
 		log.Infof("[bootstrap] Continuing with %v nodes: %s", len(nodes), nodes)
 	}
-	bootstrapNewNodes(nodesAsString, consulServers, nodes, consulLogLocation, true, fallbackDNSRecursors)
+	bootstrapNewNodes(dockerDaemonUrl, c.String(FlDockerDaemonHost.Name), nodesAsString, consulServers, nodes, true, fallbackDNSRecursors)
 
 	log.Info("[bootstrap] Finished Swarm bootstrapping.")
 	log.Info("[bootstrap] To try the new Swarm Manager run 'docker -H tcp://127.0.0.1:3376 info'")
 }
 
-func add(c *cli.Context) {
+func Add(c *cli.Context) {
 
 	if len(c.Args()) != 1 {
 		log.Fatalf("[bootstrap] Nodes must be provided as a comma separated list. See '%s add --help'.", c.App.Name)
 	}
 
-	if len(c.String(flConsulJoin.Name)) == 0 {
+	if len(c.String(FlConsulJoin.Name)) == 0 {
 		log.Fatalf("[bootstrap] --join is required. See '%s bootstrap --help'.", c.App.Name)
 	}
 
 	nodesAsString := c.Args()[0]
-	wait := c.Int(flWait.Name)
-	consulLogLocation := c.String(flConsulLogLocation.Name)
+
+	dockerDaemonUrl := dockerDaemonUrl(c)
+	wait := c.Int(FlWait.Name)
 	var fallbackDNSRecursors []string
-	if len(c.String(flFallbackDNSRecursors.Name)) > 0 {
-		fallbackDNSRecursors = strings.Split(c.String(flFallbackDNSRecursors.Name), ",")
+	if len(c.String(FlFallbackDNSRecursors.Name)) > 0 {
+		fallbackDNSRecursors = strings.Split(c.String(FlFallbackDNSRecursors.Name), ",")
 	}
 
-	consulJoin := c.String(flConsulJoin.Name)
+	consulJoin := c.String(FlConsulJoin.Name)
 	if strings.HasPrefix(consulJoin, "consul://") {
 		consulJoin = consulJoin[9:]
 	}
@@ -120,9 +122,17 @@ func add(c *cli.Context) {
 		nodes = waitForDockerDaemons(wait, nodes)
 		log.Infof("[bootstrap] Continuing with %v nodes: %s", len(nodes), nodes)
 	}
-	bootstrapNewNodes(nodesAsString, peers, nodes, consulLogLocation, false, fallbackDNSRecursors)
+	bootstrapNewNodes(dockerDaemonUrl, c.String(FlDockerDaemonHost.Name), nodesAsString, peers, nodes, false, fallbackDNSRecursors)
 
 	log.Info("[bootstrap] Finished adding new nodes to the Consul-Swarm cluster.")
+}
+
+func dockerDaemonUrl(c *cli.Context) string {
+	dockerDaemonUrl := "unix:///var/run/docker.sock"
+	if len(c.String(FlDockerDaemonHost.Name)) != 0 {
+		dockerDaemonUrl = "http://" + c.String(FlDockerDaemonHost.Name) + ":" + strconv.Itoa(c.Int(FlDockerDaemonPort.Name))
+	}
+	return dockerDaemonUrl
 }
 
 func waitForDockerDaemons(wait int, nodes []string) []string {
@@ -168,28 +178,39 @@ func waitForDockerDaemons(wait int, nodes []string) []string {
 	}
 }
 
-func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []string, consulLogLocation string, startSwarmManager bool, fallbackDNSRecursors []string) {
-	log.Debug("[bootstrap] Creating docker client with docker.sock.")
-	client, err := docker.NewDockerClient("unix:///var/run/docker.sock", nil)
+func bootstrapNewNodes(dockerDaemonUrl string, dockerDaemonHost string, nodesAsString string, consulServers []string, nodes []string,
+	startSwarmManager bool, fallbackDNSRecursors []string) {
+	log.Infof("[bootstrap] Creating docker client with: %s", dockerDaemonUrl)
+	client, err := docker.NewDockerClient(dockerDaemonUrl, nil)
 	if err != nil {
 		log.Fatalf("[bootstrap] Failed to create Docker client with docker.sock: %s", err)
 	}
 
-	tmpSwarmManagerID, swarmManagerErr := runSwarmManagerContainer(client, TmpSwarmContainerName, nodesAsString, false)
+	tmpSwarmManagerID, swarmManagerErr := runSwarmManagerContainer(client, TmpSwarmContainerName, nodesAsString, "3377")
 	if swarmManagerErr != nil {
 		os.Exit(1)
-	}
-
-	tmpSwarmManagerContainer, inspectErr := client.InspectContainer(tmpSwarmManagerID)
-	if inspectErr != nil {
-		log.Fatalf("[bootstrap] Failed to inspect temporary Swarm manager container: %s", err)
 	}
 
 	log.Debug("[bootstrap] Wait for temporary swarm manager to find the nodes.")
 	time.Sleep(SecondsBetweenGetSwarmAgentsAttempts * time.Second)
 
 	log.Debug("[bootstrap] Creating docker client for temporary Swarm Manager.")
-	tmpSwarmClient, err := docker.NewDockerClient("http://"+tmpSwarmManagerContainer.NetworkSettings.IPAddress+":3376", nil)
+
+	tmpSwarmManagerContainer, inspectErr := client.InspectContainer(tmpSwarmManagerID)
+	if inspectErr != nil {
+		log.Fatalf("[bootstrap] Failed to inspect temporary Swarm manager container: %s", err)
+	}
+
+	var tmpSwarmAddress string
+	if dockerDaemonHost == "" {
+
+		tmpSwarmAddress = "http://" + tmpSwarmManagerContainer.NetworkSettings.IPAddress + ":3376"
+	} else {
+		tmpSwarmAddress = "http://" + dockerDaemonHost + ":3377"
+	}
+
+	log.Infof("[bootstrap] Creating docker client for temporary Swarm Manager: %s", tmpSwarmAddress)
+	tmpSwarmClient, err := docker.NewDockerClient(tmpSwarmAddress, nil)
 	if err != nil {
 		log.Fatalf("[bootstrap] Failed to create Docker client for temporary Swarm manager: %s", err)
 	}
@@ -221,7 +242,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		wg.Add(1)
 		go func(node *SwarmNode) {
 			defer wg.Done()
-			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers, consulLogLocation, fallbackDNSRecursors)
+			runConsulConfigCopyContainer(tmpSwarmClient, "copy", node, consulServers, fallbackDNSRecursors)
 		}(node)
 	}
 
@@ -232,7 +253,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 		wg.Add(1)
 		go func(node *SwarmNode) {
 			defer wg.Done()
-			runConsulContainer(tmpSwarmClient, "consul", node, consulLogLocation)
+			runConsulContainer(tmpSwarmClient, "consul", node)
 		}(node)
 	}
 
@@ -269,7 +290,7 @@ func bootstrapNewNodes(nodesAsString string, consulServers []string, nodes []str
 
 	if startSwarmManager {
 		time.Sleep(3000 * time.Millisecond)
-		if _, err := runSwarmManagerContainer(client, SwarmContainerName, "consul://"+consulServers[0]+":8500/swarm", true); err != nil {
+		if _, err := runSwarmManagerContainer(client, SwarmContainerName, "consul://"+consulServers[0]+":8500/swarm", "3376"); err != nil {
 			os.Exit(1)
 		}
 	}

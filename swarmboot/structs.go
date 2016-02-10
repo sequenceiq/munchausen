@@ -1,10 +1,12 @@
-package main
+package swarmboot
 
-import ()
+import (
+	"fmt"
+)
 
 const (
-	ConsulImage           = "sequenceiq/consul:v0.5.0-v5"
-	SwarmImage            = "swarm:0.4.0"
+	ConsulImage      = "gliderlabs/consul:0.6"
+	SwarmImage            = "swarm:1.1.0"
 	TmpSwarmContainerName = "tmp-swarm-manager"
 	SwarmContainerName    = "swarm-manager"
 )
@@ -24,9 +26,9 @@ type PortConfig struct {
 }
 
 type DNSConfig struct {
-	AllowStale  bool              `json:"allow_stale"`
-	MaxStale    string            `json:"max_stale"`
-	NodeTTL     string            `json:"node_ttl"`
+	AllowStale bool   `json:"allow_stale"`
+	MaxStale   string `json:"max_stale"`
+	NodeTTL    string `json:"node_ttl"`
 }
 
 type ConsulConfig struct {
@@ -34,7 +36,7 @@ type ConsulConfig struct {
 	Server             bool       `json:"server"`
 	AdvertiseAddr      string     `json:"advertise_addr,omitempty"`
 	DataDir            string     `json:"data_dir"`
-	UiDir              string     `json:"ui_dir"`
+	Ui                 bool       `json:"ui"`
 	ClientAddr         string     `json:"client_addr"`
 	DNSRecursors       []string   `json:"recursors"`
 	DisableUpdateCheck bool       `json:"disable_update_check"`
@@ -57,4 +59,8 @@ type SwarmNode struct {
 	CPUs   int64
 	Memory int64
 	Labels map[string]string
+}
+
+func (r SwarmNode) String() string {
+	return fmt.Sprintf("SwarmNode[Name: %s, IP: %s, Addr: %s]", r.Name, r.IP, r.Addr)
 }

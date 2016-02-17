@@ -146,43 +146,43 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
-	portBindings := make(map[string][]docker.PortBinding)
-	portBindings["53/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "53"}}
-	portBindings["8300/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
-	portBindings["8300/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
-	portBindings["8301/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
-	portBindings["8301/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
-	portBindings["8302/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
-	portBindings["8302/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
-	portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
-	portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
+	//portBindings := make(map[string][]docker.PortBinding)
+	//portBindings["53/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "53"}}
+	//portBindings["8300/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
+	//portBindings["8300/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8300"}}
+	//portBindings["8301/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
+	//portBindings["8301/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8301"}}
+	//portBindings["8302/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
+	//portBindings["8302/udp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8302"}}
+	//portBindings["8400/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8400"}}
+	//portBindings["8500/tcp"] = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: "8500"}}
 
 	bindsArray := []string{"/etc/consul/consul.json:/config/consul.json"}
 
 	hostConfig := docker.HostConfig{
 		Binds:         bindsArray,
-		NetworkMode:   "bridge",
+		NetworkMode:   "host",
 		RestartPolicy: docker.RestartPolicy{Name: "always"},
-		PortBindings:  portBindings,
+		//PortBindings:  portBindings,
 	}
 
-	exposedPorts := make(map[string]struct{})
-	var empty struct{}
-	exposedPorts["53/udp"] = empty
-	exposedPorts["8300/tcp"] = empty
-	exposedPorts["8300/udp"] = empty
-	exposedPorts["8301/tcp"] = empty
-	exposedPorts["8301/udp"] = empty
-	exposedPorts["8302/tcp"] = empty
-	exposedPorts["8302/udp"] = empty
-	exposedPorts["8400/tcp"] = empty
-	exposedPorts["8500/tcp"] = empty
+	//exposedPorts := make(map[string]struct{})
+	//var empty struct{}
+	//exposedPorts["53/udp"] = empty
+	//exposedPorts["8300/tcp"] = empty
+	//exposedPorts["8300/udp"] = empty
+	//exposedPorts["8301/tcp"] = empty
+	//exposedPorts["8301/udp"] = empty
+	//exposedPorts["8302/tcp"] = empty
+	//exposedPorts["8302/udp"] = empty
+	//exposedPorts["8400/tcp"] = empty
+	//exposedPorts["8500/tcp"] = empty
 
 	var config *docker.ContainerConfig;
 
 	config = &docker.ContainerConfig{
 		Image:        ConsulImage,
-		ExposedPorts: exposedPorts,
+		//ExposedPorts: exposedPorts,
 		Env:          []string{"constraint:node==" + node.Name},
 		HostConfig:   hostConfig,
 		Cmd:          []string{"agent", "-config-dir", "/config"},

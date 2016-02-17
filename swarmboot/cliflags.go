@@ -13,12 +13,12 @@ var (
 	FlDockerDaemonHost = cli.StringFlag{
 		Name:  "dockerHost",
 		Value: "",
-		Usage: "Docker daemon URL t",
+		Usage: "Docker daemon URL",
 	}
 	FlDockerDaemonPort = cli.IntFlag{
 		Name:  "dockerPort",
 		Value: 2376,
-		Usage: "Docker daemon URL t",
+		Usage: "Docker daemon port",
 	}
 	FlConsulServers = cli.StringFlag{
 		Name:  "consulServers",

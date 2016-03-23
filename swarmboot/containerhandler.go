@@ -262,7 +262,7 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		ExposedPorts: exposedPorts,
 		HostConfig:   hostConfig,
 	}
-	client.PullImage(SwarmImage, nil)
+	// client.PullImage(SwarmImage, nil)
 	if err := client.RemoveContainer(name, true, true); err != nil {
 		log.Debugf("[containerhandler] Couldn't remove container: %s: %s", name, strings.TrimSpace(err.Error()))
 	} else {

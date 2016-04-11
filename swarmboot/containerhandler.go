@@ -184,11 +184,11 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 	}
 
 	config = &docker.ContainerConfig{
-		Image:        ConsulImage,
+		Image: ConsulImage,
 		//ExposedPorts: exposedPorts,
 		Entrypoint: []string{"/bin/consul"},
-		Env:          []string{"constraint:node==" + node.Name},
-		HostConfig:   hostConfig,
+		Env:        []string{"constraint:node==" + node.Name},
+		HostConfig: hostConfig,
 		Cmd:        cmd,
 	}
 
@@ -266,7 +266,10 @@ func runSwarmManagerContainer(client *docker.DockerClient, name string, discover
 		ExposedPorts: exposedPorts,
 		HostConfig:   hostConfig,
 	}
-	client.PullImage(SwarmImage, nil)
+
+	log.Info("DONT pull swarm image ...")
+	//client.PullImage(SwarmImage, nil)
+	//log.Info("image pulled")
 	if err := client.RemoveContainer(name, true, true); err != nil {
 		log.Debugf("[containerhandler] Couldn't remove container: %s: %s", name, strings.TrimSpace(err.Error()))
 	} else {

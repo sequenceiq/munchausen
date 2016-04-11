@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	ConsulImage      = "gliderlabs/consul:0.6"
+	ConsulImage           = "gliderlabs/consul-server:0.6"
 	SwarmImage            = "swarm:1.1.0"
 	TmpSwarmContainerName = "tmp-swarm-manager"
 	SwarmContainerName    = "swarm-manager"

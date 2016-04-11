@@ -253,7 +253,7 @@ func bootstrapNewNodes(dockerDaemonUrl string, dockerDaemonHost string, nodesAsS
 		wg.Add(1)
 		go func(node *SwarmNode) {
 			defer wg.Done()
-			runConsulContainer(tmpSwarmClient, "consul", node)
+			runConsulContainer(tmpSwarmClient, "consul", node, consulServers)
 		}(node)
 	}
 

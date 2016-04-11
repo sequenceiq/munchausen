@@ -142,7 +142,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	return id, nil
 }
 
-func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode) (string, error) {
+func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNode, consulServers []string) (string, error) {
 	name = fmt.Sprintf("%s-%s", node.Name, name)
 	log.Debugf("[containerhandler] Creating consul container [Name: %s]", name)
 
@@ -178,14 +178,20 @@ func runConsulContainer(client *docker.DockerClient, name string, node *SwarmNod
 	//exposedPorts["8400/tcp"] = empty
 	//exposedPorts["8500/tcp"] = empty
 
-	var config *docker.ContainerConfig;
+	var config *docker.ContainerConfig
+
+	cmd := []string{"agent", "-server", "-bootstrap-expect=3", "-config-dir", "/config", "-advertise", node.IP}
+	for _, ip := range consulServers {
+		cmd = append(cmd, "-join", ip)
+	}
 
 	config = &docker.ContainerConfig{
 		Image:        ConsulImage,
 		//ExposedPorts: exposedPorts,
+		Entrypoint: []string{"/bin/consul"},
 		Env:          []string{"constraint:node==" + node.Name},
 		HostConfig:   hostConfig,
-		Cmd:          []string{"agent", "-config-dir", "/config"},
+		Cmd:        cmd,
 	}
 
 	if err := client.RemoveContainer(fmt.Sprintf("%s/%s", node.Name, name), true, true); err != nil {

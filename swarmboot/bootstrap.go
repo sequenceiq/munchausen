@@ -133,6 +133,7 @@ func dockerDaemonUrl(c *cli.Context) string {
 	if len(c.String(FlDockerDaemonHost.Name)) != 0 {
 		dockerDaemonUrl = "http://" + c.String(FlDockerDaemonHost.Name) + ":" + strconv.Itoa(c.Int(FlDockerDaemonPort.Name))
 	}
+	log.Infof("dockerDaemonUrl: %s", dockerDaemonUrl)
 	return dockerDaemonUrl
 }
 

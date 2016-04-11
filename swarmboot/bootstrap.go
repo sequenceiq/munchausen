@@ -2,15 +2,16 @@ package swarmboot
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/codegangsta/cli"
-	consul "github.com/hashicorp/consul/api"
-	docker "github.com/samalba/dockerclient"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/codegangsta/cli"
+	consul "github.com/hashicorp/consul/api"
+	docker "github.com/samalba/dockerclient"
 )
 
 const (

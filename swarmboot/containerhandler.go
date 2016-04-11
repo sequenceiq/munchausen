@@ -3,12 +3,13 @@ package swarmboot
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	docker "github.com/samalba/dockerclient"
 	"io/ioutil"
 	"regexp"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	docker "github.com/samalba/dockerclient"
 )
 
 func getSwarmNodes(client *docker.DockerClient) ([]*SwarmNode, error) {

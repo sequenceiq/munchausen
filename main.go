@@ -1,10 +1,11 @@
 package main
 
 import (
+	"os"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
-	"github.com/sequenceiq/swarm-bootstrap/swarmboot"
-	"os"
+	"github.com/sequenceiq/munchausen/swarmboot"
 )
 
 func main() {

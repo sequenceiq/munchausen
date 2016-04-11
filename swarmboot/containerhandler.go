@@ -88,9 +88,6 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	log.Debugf("[containerhandler] RetryJoin IPs for node %s: %s", node.Name, joinIPs)
 	consulConfig := ConsulConfig{
 		AdvertiseAddr:      strings.Split(node.Addr, ":")[0],
-		DataDir:            "/data",
-		Ui:                 true,
-		ClientAddr:         "0.0.0.0",
 		DNSRecursors:       dnsRecursors,
 		DisableUpdateCheck: true,
 		RetryJoin:          joinIPs,

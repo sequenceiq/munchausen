@@ -119,7 +119,7 @@ func runConsulConfigCopyContainer(client *docker.DockerClient, name string, node
 	log.Debugf("[containerhandler] Consul configuration file created for node: %s", node.Name)
 	config := &docker.ContainerConfig{
 		Image:      "gliderlabs/alpine:3.1",
-		Cmd:        []string{"sh", "-c", "echo '" + string(consulConfigJson) + "' > /config/consul.json && cat /config/consul.json"},
+		Cmd:        []string{"sh", "-c", "rm -rf /config/consul.json && echo '" + string(consulConfigJson) + "' > /config/consul.json && cat /config/consul.json"},
 		Env:        []string{"constraint:node==" + node.Name},
 		HostConfig: hostConfig,
 	}
